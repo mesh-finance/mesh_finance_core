@@ -25,6 +25,8 @@ brownie compile
 
 ## Testing
 
+Current scope of testing is funds contracts. For specific strategies, testing needs to be done manually for now.
+
 To run the tests:
 
 ```
