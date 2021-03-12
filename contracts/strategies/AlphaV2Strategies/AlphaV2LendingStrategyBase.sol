@@ -34,7 +34,7 @@ contract AlphaV2LendingStrategyBase is IStrategy {
   address public aBox;
 
   // these tokens cannot be claimed by the governance
-  mapping(address => bool) public unsalvagableTokens;
+  mapping(address => bool) public canNotSweep;
 
   bool public investActivated;
 
@@ -50,9 +50,9 @@ contract AlphaV2LendingStrategyBase is IStrategy {
     aBox = _aBox;
     creator = msg.sender;
 
-    // set these tokens to be not salvageable
-    unsalvagableTokens[underlying] = true;
-    unsalvagableTokens[aBox] = true;
+    // restricted tokens, can not be swept
+    canNotSweep[underlying] = true;
+    canNotSweep[aBox] = true;
 
     investActivated = true;
   }
@@ -151,12 +151,13 @@ contract AlphaV2LendingStrategyBase is IStrategy {
   // no tokens apart from underlying should be sent to this contract. Any tokens that are sent here by mistake are recoverable by governance
   function sweep(address _token, address _sweepTo) external {
     require(governance() == msg.sender, "Not governance");
-    require(!unsalvagableTokens[_token], "token is defined as not salvageable");
+    require(!canNotSweep[_token], "Token is restricted");
     IERC20(_token).safeTransfer(_sweepTo, IERC20(_token).balanceOf(address(this)));
   }
 
   /**
-  * Keeping this here as I did not find how to get totalReward */
+  * Keeping this here as I did not find how to get totalReward 
+  */
   function claim(uint256 totalReward, bytes32[] memory proof) external onlyFundOrGovernance { 
     IAlphaV2(aBox).claim(totalReward, proof);
   }

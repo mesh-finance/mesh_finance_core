@@ -33,7 +33,7 @@ contract YearnV2StrategyBase is IStrategy {
   address public yVault;
 
   // these tokens cannot be claimed by the governance
-  mapping(address => bool) public unsalvagableTokens;
+  mapping(address => bool) public canNotSweep;
 
   bool public investActivated;
 
@@ -48,9 +48,9 @@ contract YearnV2StrategyBase is IStrategy {
     yVault = _yVault;
     creator = msg.sender;
 
-    // set these tokens to be not salvageable
-    unsalvagableTokens[underlying] = true;
-    unsalvagableTokens[yVault] = true;
+    // restricted tokens, can not be swept
+    canNotSweep[underlying] = true;
+    canNotSweep[yVault] = true;
 
     investActivated = true;
   }
@@ -152,7 +152,7 @@ contract YearnV2StrategyBase is IStrategy {
   // no tokens apart from underlying should be sent to this contract. Any tokens that are sent here by mistake are recoverable by governance
   function sweep(address _token, address _sweepTo) external {
     require(governance() == msg.sender, "Not governance");
-    require(!unsalvagableTokens[_token], "token is defined as not salvageable");
+    require(!canNotSweep[_token], "Token is restricted");
     IERC20(_token).safeTransfer(_sweepTo, IERC20(_token).balanceOf(address(this)));
   }
 

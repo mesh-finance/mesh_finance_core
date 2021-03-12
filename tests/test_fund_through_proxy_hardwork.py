@@ -8,7 +8,7 @@ def test_hard_work_single_strategy(fund_through_proxy, accounts, token, profit_s
     fund_through_proxy.deposit(50000000, {'from': accounts[1]})
 
     token.grantRole(brownie.web3.keccak(text="MINTER_ROLE"), profit_strategy_10, {'from': accounts[0]})
-    fund_through_proxy.addStrategy(profit_strategy_10, 5000, 500, {'from': accounts[0]})
+    fund_through_proxy.addStrategy(profit_strategy_10, 5000, 0, {'from': accounts[0]})
 
     tx = fund_through_proxy.doHardWork({'from': accounts[0]})
     profit_strategy_10.investAllUnderlying({'from': accounts[0]})
@@ -19,6 +19,24 @@ def test_hard_work_single_strategy(fund_through_proxy, accounts, token, profit_s
     assert profit_strategy_10.investedUnderlyingBalance() == (50/100 * 50000000) * (1 + 10/100)
     assert fund_through_proxy.getPricePerShare() == expected_price_per_share
     assert tx.events["HardWorkDone"].values() == [50000000, fund_through_proxy.underlyingUnit()]
+
+def test_multiple_hard_work_single_strategy(fund_through_proxy, accounts, token, profit_strategy_10):
+    token.mint(accounts[1], 100000000, {'from': accounts[0]})
+    token.approve(fund_through_proxy, 50000000, {'from': accounts[1]})
+    fund_through_proxy.deposit(50000000, {'from': accounts[1]})
+
+    token.grantRole(brownie.web3.keccak(text="MINTER_ROLE"), profit_strategy_10, {'from': accounts[0]})
+    fund_through_proxy.addStrategy(profit_strategy_10, 5000, 0, {'from': accounts[0]})
+
+    tx = fund_through_proxy.doHardWork({'from': accounts[0]})
+    profit_strategy_10.investAllUnderlying({'from': accounts[0]})
+
+    token.approve(fund_through_proxy, 50000000, {'from': accounts[1]})
+    fund_through_proxy.deposit(50000000, {'from': accounts[1]})
+
+    tx = fund_through_proxy.doHardWork({'from': accounts[0]})
+
+    assert profit_strategy_10.investedUnderlyingBalance() == ((50/100 * 50000000) * (1 + 10/100)) + (50/100 * 50000000)
 
 def test_hard_work_multiple_strategies(fund_through_proxy, accounts, token, profit_strategy_10, profit_strategy_50):
     token.mint(accounts[1], 100000000, {'from': accounts[0]})

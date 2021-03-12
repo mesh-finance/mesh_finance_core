@@ -29,6 +29,11 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
   event PlatformRewards(uint256 lastBalance, uint256 timeElapsed, uint256 platformFee);
   event HardWorkDone(uint256 totalValueLocked, uint256 pricePerShare);
 
+  event StrategyAdded(address strategy, uint256 weightage, uint256 performanceFeeStrategy);
+  event StrategyWeightageUpdated(address strategy, uint256 newWeightage);
+  event StrategyPerformanceFeeUpdated(address strategy, uint256 newPerformanceFeeStrategy);
+  event StrategyRemoved(address strategy);
+
   address internal constant ZERO_ADDRESS = address(0);
 
   uint256 internal constant MAX_BPS = 10000;   // 100% in basis points
@@ -126,8 +131,9 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     return IERC20(_underlying()).balanceOf(address(this));
   }
 
-  /* Returns the current underlying (e.g., DAI's) balance together with
-   * the invested amount (if DAI is invested elsewhere by the strategies).
+  /* 
+  * Returns the current underlying (e.g., DAI's) balance together with
+  * the invested amount (if DAI is invested elsewhere by the strategies).
   */
   function underlyingBalanceWithInvestment() internal view returns (uint256) {
     uint256 underlyingBalance = underlyingBalanceInFund();
@@ -141,6 +147,9 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     return underlyingBalance;
   }
 
+  /* 
+  * Returns price per share, scaled by underlying unit (10 ** 18) to keep everything in uint256.
+  */
   function _getPricePerShare() internal view returns (uint256) {
     return totalSupply() == 0
         ? _underlyingUnit()
@@ -155,7 +164,8 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     return underlyingBalanceWithInvestment();
   }
 
-  /* get the user's share (in underlying)
+  /* 
+  * get the user's share (in underlying)
   */
   function underlyingBalanceWithInvestmentForHolder(address holder) view external override returns (uint256) {
     if (totalSupply() == 0) {
@@ -188,6 +198,8 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
 
     IERC20(_underlying()).safeApprove(newStrategy, 0);
     IERC20(_underlying()).safeApprove(newStrategy, uint256(~0));
+
+    emit StrategyAdded(newStrategy, weightage, performanceFeeStrategy);
   }
 
   function removeStrategy(address activeStrategy) external onlyFundManagerOrGovernance {
@@ -205,6 +217,8 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     IERC20(_underlying()).safeApprove(activeStrategy, 0);
     IStrategy(activeStrategy).withdrawAllToFund();
     _setShouldRebalance(true);
+
+    emit StrategyRemoved(activeStrategy);
   }
 
   function updateStrategyWeightage(address activeStrategy, uint256 newWeightage) external onlyFundManagerOrGovernance {
@@ -216,6 +230,8 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     _setTotalWeightInStrategies(_totalWeightInStrategies().sub(strategies[activeStrategy].weightage).add(newWeightage));
     strategies[activeStrategy].weightage = newWeightage;
     _setShouldRebalance(true);
+    
+    emit StrategyWeightageUpdated(activeStrategy, newWeightage);
   }
   
   function updateStrategyPerformanceFee(address activeStrategy, uint256 newPerformanceFeeStrategy) external onlyFundManagerOrGovernance {
@@ -224,6 +240,8 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     require(newPerformanceFeeStrategy <= MAX_PERFORMANCE_FEE_STRATEGY, "Performance fee too high");
 
     strategies[activeStrategy].performanceFeeStrategy = newPerformanceFeeStrategy;
+    
+    emit StrategyPerformanceFeeUpdated(activeStrategy, newPerformanceFeeStrategy);
   }
 
   function processFees() internal {
@@ -258,7 +276,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     }
   }
 
-  /**
+  /*
   * Invests the underlying capital to various strategies. Looks for weightage changes.
   */
   function doHardWork() whenStrategyDefined onlyFundManagerOrGovernance external {
@@ -282,7 +300,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     uint256 lastReserve = _totalAccounted() > 0 ? _totalAccounted().sub(_totalInvested()) : 0;
     uint256 availableAmountToInvest = underlyingBalanceInFund() > lastReserve ? underlyingBalanceInFund().sub(lastReserve) : 0;
     
-    if (availableAmountToInvest > 0) {
+    if (availableAmountToInvest <= 0) {
       return;
     }
     

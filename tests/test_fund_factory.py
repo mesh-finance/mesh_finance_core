@@ -8,6 +8,24 @@ fund_symbol = "MDXGF"
 def test_initialization(fund_factory, accounts):
     assert fund_factory.governance() == accounts[0]
 
+def test_update_governance_from_non_governance_account(fund_factory, accounts):
+    
+    with brownie.reverts():
+        fund_factory.updateGovernance(accounts[2], {'from': accounts[1]})
+
+def test_update_governance_accept_from_wrong_account(fund_factory, accounts):
+    fund_factory.updateGovernance(accounts[2], {'from': accounts[0]})
+    
+    with brownie.reverts():
+        fund_factory.acceptGovernance({'from': accounts[1]})
+
+def test_update_governance_and_accept(fund_factory, accounts):
+    fund_factory.updateGovernance(accounts[2], {'from': accounts[0]})
+    tx = fund_factory.acceptGovernance({'from': accounts[2]})
+    
+    assert fund_factory.governance() == accounts[2]
+    assert tx.events["GovernanceUpdated"].values() == [accounts[2]]
+
 def test_create_fund_from_non_fund_implementation(fund_factory, accounts, token):
     
     with brownie.reverts():
