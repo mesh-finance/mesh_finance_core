@@ -24,7 +24,7 @@ def test_update_governance_and_accept(fund_factory, accounts):
     tx = fund_factory.acceptGovernance({'from': accounts[2]})
     
     assert fund_factory.governance() == accounts[2]
-    assert tx.events["GovernanceUpdated"].values() == [accounts[2]]
+    assert tx.events["GovernanceUpdated"].values() == [accounts[2], accounts[0]]
 
 def test_create_fund_from_non_fund_implementation(fund_factory, accounts, token):
     

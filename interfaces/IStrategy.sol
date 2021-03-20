@@ -13,5 +13,5 @@ interface IStrategy {
     function investedUnderlyingBalance() external view returns (uint256);
 
     function doHardWork() external;
-    function depositArbCheck() external view returns(bool);
+    function depositArbCheck() external view returns (bool);
 }

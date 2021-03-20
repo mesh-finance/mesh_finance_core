@@ -2,10 +2,11 @@
 pragma solidity 0.6.12;
 
 import "OpenZeppelin/openzeppelin-contracts-upgradeable@3.4.0/contracts/proxy/Initializable.sol";
+import "./SetGetAssembly.sol";
 
-contract Governable is Initializable {
+contract Governable is Initializable, SetGetAssembly {
 
-  event GovernanceUpdated(address governance);
+  event GovernanceUpdated(address newGovernance, address oldGovernance);
 
   bytes32 internal constant _GOVERNANCE_SLOT = 0x597f9c7c685b907e823520bd45aeb3d58b505f86b2e41cd5b4cd5b6c72782950;
   bytes32 internal constant _PENDING_GOVERNANCE_SLOT = 0xcd77091f18f9504fccf6140ab99e20533c811d470bb9a5a983d0edc0720fbf8c;
@@ -25,19 +26,11 @@ contract Governable is Initializable {
   }
 
   function _setGovernance(address _governance) private {
-    bytes32 slot = _GOVERNANCE_SLOT;
-    // solhint-disable-next-line no-inline-assembly
-    assembly {
-      sstore(slot, _governance)
-    }
+    setAddress(_GOVERNANCE_SLOT, _governance);
   }
 
   function _setPendingGovernance(address _pendingGovernance) private {
-    bytes32 slot = _PENDING_GOVERNANCE_SLOT;
-    // solhint-disable-next-line no-inline-assembly
-    assembly {
-      sstore(slot, _pendingGovernance)
-    }
+    setAddress(_PENDING_GOVERNANCE_SLOT, _pendingGovernance);
   }
 
   function updateGovernance(address _newGovernance) public onlyGovernance {
@@ -47,24 +40,17 @@ contract Governable is Initializable {
 
   function acceptGovernance() public {
     require(_pendingGovernance() == msg.sender, "Not pending governance");
+    address oldGovernance = _governance();
     _setGovernance(msg.sender);
-    emit GovernanceUpdated(msg.sender);
+    emit GovernanceUpdated(msg.sender, oldGovernance);
   }
 
   function _governance() internal view returns (address str) {
-    bytes32 slot = _GOVERNANCE_SLOT;
-    // solhint-disable-next-line no-inline-assembly
-    assembly {
-      str := sload(slot)
-    }
+    return getAddress(_GOVERNANCE_SLOT);
   }
 
   function _pendingGovernance() internal view returns (address str) {
-    bytes32 slot = _PENDING_GOVERNANCE_SLOT;
-    // solhint-disable-next-line no-inline-assembly
-    assembly {
-      str := sload(slot)
-    }
+    return getAddress(_PENDING_GOVERNANCE_SLOT);
   }
 
   function governance() public view returns (address) {

@@ -27,4 +27,4 @@ def test_accept_governance_event_fires(governable, accounts):
     tx = governable.acceptGovernance({'from': accounts[2]})
 
     assert len(tx.events) == 1
-    assert tx.events["GovernanceUpdated"].values() == [accounts[2]]
+    assert tx.events["GovernanceUpdated"].values() == [accounts[2], accounts[1]]

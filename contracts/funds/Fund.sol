@@ -95,19 +95,19 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     _;
   }
 
-  function fundManager() external view returns(address) {
+  function fundManager() external view returns (address) {
     return _fundManager();
   }
 
-  function underlying() external view override returns(address) {
+  function underlying() external view override returns (address) {
     return _underlying();
   }
 
-  function underlyingUnit() external view returns(uint256) {
+  function underlyingUnit() external view returns (uint256) {
     return _underlyingUnit();
   }
 
-  function getStrategyCount() internal view returns(uint256 strategyCount) {
+  function getStrategyCount() internal view returns (uint256) {
     return strategyList.length;
   }
 
@@ -116,11 +116,11 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     _;
   }
 
-  function getStrategyList() public view returns (address[] memory listOfStrategies) { 
+  function getStrategyList() public view returns (address[] memory) { 
     return strategyList; 
   }
 
-  function getStrategy(address strategy) public view returns (StrategyParams memory strategyDetail) { 
+  function getStrategy(address strategy) public view returns (StrategyParams memory) { 
     return strategies[strategy]; 
   }
 
@@ -141,7 +141,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
       // initial state, when not set
       return underlyingBalance;
     }
-    for (uint256 i=0; i<getStrategyCount(); i++) {
+    for (uint256 i = 0; i < getStrategyCount(); i++) {
       underlyingBalance = underlyingBalance.add(IStrategy(strategyList[i]).investedUnderlyingBalance());
     }
     return underlyingBalance;
@@ -176,7 +176,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
         .div(totalSupply());
   }
 
-  function isActiveStrategy(address strategy) internal view returns(bool isActive) {
+  function isActiveStrategy(address strategy) internal view returns (bool) {
     return strategies[strategy].weightage > 0;
   }
 
@@ -208,7 +208,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
 
     _setTotalWeightInStrategies(_totalWeightInStrategies().sub(strategies[activeStrategy].weightage));
     uint256 totalStrategies = getStrategyCount();
-    for (uint256 i=strategies[activeStrategy].indexInList; i<totalStrategies-1; i++) {
+    for (uint256 i = strategies[activeStrategy].indexInList; i < totalStrategies-1; i++) {
       strategyList[i] = strategyList[i+1];
       strategies[strategyList[i]].indexInList = i;
     }
@@ -248,7 +248,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     uint256 profitToFund = 0;
     uint256 platformFee = (_totalInvested() * (block.timestamp - _lastHardworkTimestamp())).mul(_platformFee()).div(MAX_BPS).div(SECS_PER_YEAR);
     
-    for (uint256 i=0; i<getStrategyCount(); i++) {
+    for (uint256 i = 0; i < getStrategyCount(); i++) {
       address strategy = strategyList[i];
         
       uint256 profit = MathUpgradeable.max((IStrategy(strategy).investedUnderlyingBalance() - strategies[strategy].lastBalance), 0);
@@ -306,7 +306,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     
     _setTotalAccounted(_totalAccounted().add(availableAmountToInvest));
     
-    for (uint256 i=0; i<getStrategyCount(); i++) { 
+    for (uint256 i = 0; i < getStrategyCount(); i++) { 
       address strategy = strategyList[i];
       uint256 availableAmountForStrategy = availableAmountToInvest.mul(strategies[strategy].weightage).div(MAX_BPS);
       if (availableAmountForStrategy > 0) {
@@ -327,7 +327,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     uint256 totalInvested = 0;
     uint256[] memory toDeposit = new uint256[](getStrategyCount());
     
-    for (uint256 i=0; i<getStrategyCount(); i++) {
+    for (uint256 i = 0; i < getStrategyCount(); i++) {
       address strategy = strategyList[i];
       uint256 shouldBeInStrategy = totalUnderlyingWithInvestment.mul(strategies[strategy].weightage).div(MAX_BPS);
       totalInvested = totalInvested.add(shouldBeInStrategy);
@@ -340,7 +340,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     }
     _setTotalInvested(totalInvested);
 
-    for (uint256 i=0; i<getStrategyCount(); i++) {
+    for (uint256 i=0; i < getStrategyCount(); i++) {
       address strategy = strategyList[i];
       if (toDeposit[i] > 0) {
         IERC20(_underlying()).safeTransfer(strategy, toDeposit[i]);
@@ -410,7 +410,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
 
     if (underlyingAmountToWithdraw > underlyingBalanceInFund()) {
       uint256 missing = underlyingAmountToWithdraw.sub(underlyingBalanceInFund());
-      for (uint256 i=0; i<getStrategyCount(); i++) {
+      for (uint256 i = 0; i < getStrategyCount(); i++) {
         if (isActiveStrategy(strategyList[i])) {
           uint256 weightage = strategies[strategyList[i]].weightage;
           uint256 missingforStrategy = missing.mul(weightage).div(MAX_BPS);
@@ -425,7 +425,9 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     underlyingAmountToWithdraw = underlyingAmountToWithdraw.sub(withdrawalFee);
 
     IERC20(_underlying()).safeTransfer(msg.sender, underlyingAmountToWithdraw);
-    IERC20(_underlying()).safeTransfer(_platformRewards(), withdrawalFee);
+    if (withdrawalFee > 0) {
+      IERC20(_underlying()).safeTransfer(_platformRewards(), withdrawalFee);
+    }
     
     emit Withdraw(msg.sender, underlyingAmountToWithdraw, withdrawalFee);
   }
@@ -462,7 +464,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     _setDepositLimit(limit);
   }
 
-  function depositLimit() external view returns(uint256) {
+  function depositLimit() external view returns (uint256) {
     return _depositLimit();
   }
 
@@ -471,7 +473,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     _setDepositLimitTxMax(limit);
   }
 
-  function depositLimitTxMax() external view returns(uint256) {
+  function depositLimitTxMax() external view returns (uint256) {
     return _depositLimitTxMax();
   }
 
@@ -480,7 +482,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     _setDepositLimitTxMin(limit);
   }
 
-  function depositLimitTxMin() external view returns(uint256) {
+  function depositLimitTxMin() external view returns (uint256) {
     return _depositLimitTxMin();
   }
 
@@ -489,7 +491,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     _setPerformanceFeeFund(fee);
   }
 
-  function performanceFeeFund() external view returns(uint256) {
+  function performanceFeeFund() external view returns (uint256) {
     return _performanceFeeFund();
   }
 
@@ -498,7 +500,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     _setPlatformFee(fee);
   }
 
-  function platformFee() external view returns(uint256) {
+  function platformFee() external view returns (uint256) {
     return _platformFee();
   }
 
@@ -507,7 +509,7 @@ contract Fund is ERC20Upgradeable, ReentrancyGuardUpgradeable, IFund, IUpgradeSo
     _setWithdrawalFee(fee);
   }
 
-  function withdrawalFee() external view returns(uint256) {
+  function withdrawalFee() external view returns (uint256) {
     return _withdrawalFee();
   }
 

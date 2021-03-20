@@ -37,11 +37,11 @@ contract ProfitStrategy is IStrategy {
     creator = msg.sender;
   }
 
-  function governance() internal returns(address) {
+  function governance() internal returns (address) {
     return IGovernable(fund).governance();
   }
   
-  function depositArbCheck() public override view returns(bool) {
+  function depositArbCheck() public override view returns (bool) {
     return true;
   }
 

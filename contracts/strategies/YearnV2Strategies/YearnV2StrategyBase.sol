@@ -55,7 +55,7 @@ contract YearnV2StrategyBase is IStrategy {
     investActivated = true;
   }
 
-  function governance() internal view returns(address) {
+  function governance() internal view returns (address) {
     return IGovernable(fund).governance();
   }
   
@@ -69,7 +69,7 @@ contract YearnV2StrategyBase is IStrategy {
   *  TODO
   */
   
-  function depositArbCheck() public override view returns(bool) {
+  function depositArbCheck() public override view returns (bool) {
     return true;
   }
 

@@ -4,5 +4,6 @@ __pycache__
 .hypothesis/
 build/
 reports/
+scripts/dev/
 .DS_Store
 .vscode

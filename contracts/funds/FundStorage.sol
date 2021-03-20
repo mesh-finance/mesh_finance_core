@@ -2,8 +2,9 @@
 pragma solidity 0.6.12;
 
 import "OpenZeppelin/openzeppelin-contracts-upgradeable@3.4.0/contracts/proxy/Initializable.sol";
+import "../utils/SetGetAssembly.sol";
 
-contract FundStorage is Initializable {
+contract FundStorage is Initializable, SetGetAssembly {
 
   bytes32 internal constant _UNDERLYING_SLOT = 0xe0dc1d429ff8628e5936b3d6a6546947e1cc9ea7415a59d46ce95b3cfa4442b9;
   bytes32 internal constant _UNDERLYING_UNIT_SLOT = 0x4840b03aa097a422092d99dc6875c2b69e8f48c9af2563a0447f3b4e4928d962;
@@ -203,42 +204,6 @@ contract FundStorage is Initializable {
 
   function _lastHardworkTimestamp() internal view returns (uint256) {
     return getUint256(_LAST_HARDWORK_TIMESTAMP_SLOT);
-  }
-
-  function setAddress(bytes32 slot, address _address) private {
-    // solhint-disable-next-line no-inline-assembly
-    assembly {
-      sstore(slot, _address)
-    }
-  }
-
-  function setUint256(bytes32 slot, uint256 _value) private {
-    // solhint-disable-next-line no-inline-assembly
-    assembly {
-      sstore(slot, _value)
-    }
-  }
-
-  function setBool(bytes32 slot, bool _value) internal {
-    setUint256(slot, _value ? 1 : 0);
-  }
-
-  function getBool(bytes32 slot) internal view returns (bool) {
-    return (getUint256(slot) == 1);
-  }
-
-  function getAddress(bytes32 slot) private view returns (address str) {
-    // solhint-disable-next-line no-inline-assembly
-    assembly {
-      str := sload(slot)
-    }
-  }
-
-  function getUint256(bytes32 slot) private view returns (uint256 str) {
-    // solhint-disable-next-line no-inline-assembly
-    assembly {
-      str := sload(slot)
-    }
   }
 
   uint256[50] private big_empty_slot;

@@ -57,7 +57,7 @@ contract AlphaV2LendingStrategyBase is IStrategy {
     investActivated = true;
   }
 
-  function governance() internal view returns(address) {
+  function governance() internal view returns (address) {
     return IGovernable(fund).governance();
   }
 
@@ -70,7 +70,7 @@ contract AlphaV2LendingStrategyBase is IStrategy {
   /**
   *  TODO
   */
-  function depositArbCheck() public override view returns(bool) {
+  function depositArbCheck() public override view returns (bool) {
     return true;
   }
 

@@ -20,7 +20,7 @@ contract FundFactory is Governable {
     address _underlying,
     string memory _name,
     string memory _symbol
-  ) public onlyGovernance returns(address) {
+  ) public onlyGovernance returns (address) {
     FundProxy proxy = new FundProxy(_implementation);
     Fund(address(proxy)).initializeFund(msg.sender,
       _underlying,
