@@ -11,6 +11,8 @@ interface IAlphaV2 {
 
     // VaultV2 user interface
     function deposit(uint256 amount) external;
+
     function withdraw(uint256 amount) external;
-    function claim(uint totalReward, bytes32[] memory proof) external;
+
+    function claim(uint256 totalReward, bytes32[] memory proof) external;
 }

@@ -1,0 +1,22 @@
+{
+  "name": "mesh_finance_core",
+  "devDependencies": {
+    "husky": "^6.0.0",
+    "prettier": "^2.2.1",
+    "prettier-plugin-solidity": "^1.0.0-beta.7",
+    "pretty-quick": "^3.1.0",
+    "solhint": "^3.3.4",
+    "solhint-plugin-prettier": "^0.0.5"
+  },
+  "scripts": {
+    "solhint": "solhint -f table contracts/**/*.sol interfaces/**/*.sol",
+    "lint": "pretty-quick --pattern '**/*.*(sol|json)' --verbose",
+    "lint:check": "prettier --check **/*.sol **/*.json",
+    "lint:fix": "pretty-quick --pattern '**/*.*(sol|json)' --staged --verbose"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "yarn lint:fix"
+    }
+  }
+}

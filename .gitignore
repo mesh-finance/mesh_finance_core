@@ -7,3 +7,4 @@ reports/
 scripts/dev/
 .DS_Store
 .vscode
+node_modules
