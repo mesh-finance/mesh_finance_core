@@ -359,19 +359,23 @@ contract Fund is
         for (uint256 i = 0; i < getStrategyCount(); i++) {
             address strategy = strategyList[i];
 
-            uint256 profit =
-                MathUpgradeable.max(
-                    (IStrategy(strategy).investedUnderlyingBalance() -
-                        strategies[strategy].lastBalance),
-                    0
-                );
+            uint256 profit = 0;
             uint256 strategyCreatorFee = 0;
 
-            if (profit > 0) {
+            if (
+                IStrategy(strategy).investedUnderlyingBalance() >
+                strategies[strategy].lastBalance
+            ) {
+                profit =
+                    IStrategy(strategy).investedUnderlyingBalance() -
+                    strategies[strategy].lastBalance;
                 strategyCreatorFee = profit
                     .mul(strategies[strategy].performanceFeeStrategy)
                     .div(MAX_BPS);
-                if (strategyCreatorFee > 0) {
+                if (
+                    strategyCreatorFee > 0 &&
+                    strategyCreatorFee < underlyingBalanceInFund()
+                ) {
                     IERC20(_underlying()).safeTransfer(
                         IStrategy(strategy).creator(),
                         strategyCreatorFee
@@ -384,7 +388,7 @@ contract Fund is
 
         uint256 fundManagerFee =
             profitToFund.mul(_performanceFeeFund()).div(MAX_BPS);
-        if (fundManagerFee > 0) {
+        if (fundManagerFee > 0 && fundManagerFee < underlyingBalanceInFund()) {
             address fundManagerRewards =
                 (_fundManager() == _governance())
                     ? _platformRewards()
@@ -395,7 +399,7 @@ contract Fund is
             );
             emit FundManagerRewards(profitToFund, fundManagerFee);
         }
-        if (platformFee > 0) {
+        if (platformFee > 0 && platformFee < underlyingBalanceInFund()) {
             IERC20(_underlying()).safeTransfer(_platformRewards(), platformFee);
             emit PlatformRewards(
                 _totalInvested(),
@@ -617,6 +621,7 @@ contract Fund is
                 underlyingAmountToWithdraw,
                 underlyingBalanceInFund()
             );
+            _setShouldRebalance(true);
         }
 
         uint256 withdrawalFee =
