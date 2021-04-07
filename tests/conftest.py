@@ -11,11 +11,11 @@ def isolate(fn_isolation):
 
 @pytest.fixture(scope="module")
 def token(Token, accounts):
-    return Token.deploy("Stable Token", "STAB", {'from': accounts[0]})
+    return Token.deploy("Stable Token", "STAB", 18, {'from': accounts[0]})
 
 @pytest.fixture(scope="module")
 def token_2(Token, accounts):
-    return Token.deploy("Stable Token 2", "STAB2", {'from': accounts[0]})
+    return Token.deploy("Stable Token 2", "STAB2", 18, {'from': accounts[0]})
 
 @pytest.fixture(scope="module")
 def fund(Fund, accounts):

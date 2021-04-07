@@ -46,7 +46,7 @@ def test_created_fund_through_proxy(fund_factory, accounts, fund, token):
     tx = fund_factory.createFund(fund, token, fund_name, fund_symbol, {'from': accounts[0]})
     fund_through_proxy = brownie.Fund.at(tx.new_contracts[0])
     
-    assert fund_through_proxy.decimals() == 18
+    assert fund_through_proxy.decimals() == token.decimals()
     assert fund_through_proxy.symbol() == fund_symbol
     assert fund_through_proxy.name() == fund_name
 

@@ -27,6 +27,7 @@ contract Fund is
     using SafeERC20 for IERC20;
     using AddressUpgradeable for address;
     using SafeMathUpgradeable for uint256;
+    using SafeMathUpgradeable for uint8;
 
     event Withdraw(address indexed beneficiary, uint256 amount, uint256 fee);
     event Deposit(address indexed beneficiary, uint256 amount);
@@ -92,12 +93,14 @@ contract Fund is
 
         Governable.initializeGovernance(_governance);
 
-        uint256 underlyingUnit =
-            10**uint256(ERC20Upgradeable(address(_underlying)).decimals());
+        uint8 _decimals = ERC20Upgradeable(address(_underlying)).decimals();
+
+        uint256 _underlyingUnit = 10**uint256(_decimals);
 
         FundStorage.initializeFundStorage(
             _underlying,
-            underlyingUnit,
+            _underlyingUnit,
+            _decimals,
             _governance, // fund manager is initialized as governance
             _governance // rewards contract is initialized as governance
         );
@@ -126,6 +129,10 @@ contract Fund is
 
     function underlyingUnit() external view returns (uint256) {
         return _underlyingUnit();
+    }
+
+    function decimals() public view virtual override returns (uint8) {
+        return _decimals();
     }
 
     function getStrategyCount() internal view returns (uint256) {
@@ -166,7 +173,7 @@ contract Fund is
             // initial state, when not set
             return underlyingBalance;
         }
-        for (uint256 i = 0; i < getStrategyCount(); i++) {
+        for (uint256 i; i < getStrategyCount(); i++) {
             underlyingBalance = underlyingBalance.add(
                 IStrategy(strategyList[i]).investedUnderlyingBalance()
             );
@@ -175,7 +182,7 @@ contract Fund is
     }
 
     /*
-     * Returns price per share, scaled by underlying unit (10 ** 18) to keep everything in uint256.
+     * Returns price per share, scaled by underlying unit (10 ** decimals) to keep everything in uint256.
      */
     function _getPricePerShare() internal view returns (uint256) {
         return
@@ -356,7 +363,7 @@ contract Fund is
                 .div(MAX_BPS)
                 .div(SECS_PER_YEAR);
 
-        for (uint256 i = 0; i < getStrategyCount(); i++) {
+        for (uint256 i; i < getStrategyCount(); i++) {
             address strategy = strategyList[i];
 
             uint256 profit = 0;
@@ -451,7 +458,7 @@ contract Fund is
 
         _setTotalAccounted(_totalAccounted().add(availableAmountToInvest));
 
-        for (uint256 i = 0; i < getStrategyCount(); i++) {
+        for (uint256 i; i < getStrategyCount(); i++) {
             address strategy = strategyList[i];
             uint256 availableAmountForStrategy =
                 availableAmountToInvest.mul(strategies[strategy].weightage).div(
@@ -482,7 +489,7 @@ contract Fund is
         uint256 totalInvested = 0;
         uint256[] memory toDeposit = new uint256[](getStrategyCount());
 
-        for (uint256 i = 0; i < getStrategyCount(); i++) {
+        for (uint256 i; i < getStrategyCount(); i++) {
             address strategy = strategyList[i];
             uint256 shouldBeInStrategy =
                 totalUnderlyingWithInvestment
@@ -503,7 +510,7 @@ contract Fund is
         }
         _setTotalInvested(totalInvested);
 
-        for (uint256 i = 0; i < getStrategyCount(); i++) {
+        for (uint256 i; i < getStrategyCount(); i++) {
             address strategy = strategyList[i];
             if (toDeposit[i] > 0) {
                 IERC20(_underlying()).safeTransfer(strategy, toDeposit[i]);
@@ -606,7 +613,7 @@ contract Fund is
         if (underlyingAmountToWithdraw > underlyingBalanceInFund()) {
             uint256 missing =
                 underlyingAmountToWithdraw.sub(underlyingBalanceInFund());
-            for (uint256 i = 0; i < getStrategyCount(); i++) {
+            for (uint256 i; i < getStrategyCount(); i++) {
                 if (isActiveStrategy(strategyList[i])) {
                     uint256 weightage = strategies[strategyList[i]].weightage;
                     uint256 missingforStrategy =

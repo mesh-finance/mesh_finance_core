@@ -8,7 +8,7 @@ fund_symbol = "MDXGF"
 def test_initialization(fund_through_proxy, accounts, token):
     assert fund_through_proxy.governance() == accounts[0]
     assert fund_through_proxy.underlying() == token
-    assert fund_through_proxy.decimals() == 18
+    assert fund_through_proxy.decimals() == token.decimals()
     assert fund_through_proxy.symbol() == fund_symbol
     assert fund_through_proxy.name() == fund_name
     assert fund_through_proxy.fundManager() == accounts[0]

@@ -9,6 +9,8 @@ contract FundStorage is Initializable, SetGetAssembly {
         0xe0dc1d429ff8628e5936b3d6a6546947e1cc9ea7415a59d46ce95b3cfa4442b9;
     bytes32 internal constant _UNDERLYING_UNIT_SLOT =
         0x4840b03aa097a422092d99dc6875c2b69e8f48c9af2563a0447f3b4e4928d962;
+    bytes32 internal constant _DECIMALS_SLOT =
+        0x15b9fa1072bc4b2cdb762a49a2c7917b8b3af02283e37ffd41d0fccd4eef0d48;
     bytes32 internal constant _FUND_MANAGER_SLOT =
         0x670552e214026020a9e6caa820519c7f879b21bd75b5571387d6a9cf8f94bd18;
     bytes32 internal constant _PLATFORM_REWARDS_SLOT =
@@ -56,6 +58,14 @@ contract FundStorage is Initializable, SetGetAssembly {
                         keccak256(
                             "eip1967.mesh.finance.fundStorage.underlyingUnit"
                         )
+                    ) - 1
+                )
+        );
+        assert(
+            _DECIMALS_SLOT ==
+                bytes32(
+                    uint256(
+                        keccak256("eip1967.mesh.finance.fundStorage.decimals")
                     ) - 1
                 )
         );
@@ -214,11 +224,13 @@ contract FundStorage is Initializable, SetGetAssembly {
     function initializeFundStorage(
         address _underlying,
         uint256 _underlyingUnit,
+        uint8 _decimals,
         address _fundManager,
         address _platformRewards
     ) public initializer {
         _setUnderlying(_underlying);
         _setUnderlyingUnit(_underlyingUnit);
+        _setDecimals(_decimals);
         _setFundManager(_fundManager);
         _setPlatformRewards(_platformRewards);
         _setDepositLimit(0);
@@ -250,6 +262,14 @@ contract FundStorage is Initializable, SetGetAssembly {
 
     function _underlyingUnit() internal view returns (uint256) {
         return getUint256(_UNDERLYING_UNIT_SLOT);
+    }
+
+    function _setDecimals(uint8 _value) internal {
+        setUint8(_DECIMALS_SLOT, _value);
+    }
+
+    function _decimals() internal view returns (uint8) {
+        return getUint8(_DECIMALS_SLOT);
     }
 
     function _setFundManager(address _fundManager) internal {
