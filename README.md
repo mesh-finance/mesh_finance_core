@@ -42,3 +42,12 @@ brownie test --network development
 ```
 
 Check [Brownie documentation for testing](https://eth-brownie.readthedocs.io/en/stable/tests-pytest-intro.html) and [Brownie documentation for networks](https://eth-brownie.readthedocs.io/en/stable/network-management.html).
+
+## Security and linting
+
+We are using solhint and prettier for base secutiry checks and linting the code. It can be used in 2 steps. First fixes all the linting issues. Second checks for any vulnerabilies including formatting.
+
+```
+yarn lint
+yarn solhint
+```
