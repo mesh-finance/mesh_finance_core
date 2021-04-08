@@ -12,6 +12,7 @@ def test_initialization(fund_through_proxy, accounts, token):
     assert fund_through_proxy.symbol() == fund_symbol
     assert fund_through_proxy.name() == fund_name
     assert fund_through_proxy.fundManager() == accounts[0]
+    assert fund_through_proxy.relayer() == accounts[0]
     assert fund_through_proxy.depositLimit() == 0
     assert fund_through_proxy.depositLimitTxMax() == 0
     assert fund_through_proxy.depositLimitTxMin() == 0
@@ -36,6 +37,16 @@ def test_set_fund_manager_with_random_account(fund_through_proxy, accounts):
     
     with brownie.reverts("Not governance nor fund manager"):
         fund_through_proxy.setFundManager(accounts[1], {'from': accounts[3]})
+
+def test_set_relayer(fund_through_proxy, accounts):
+    fund_through_proxy.setRelayer(accounts[1], {'from': accounts[0]})
+    
+    assert fund_through_proxy.relayer() == accounts[1]
+
+def test_set_relayer_with_random_account(fund_through_proxy, accounts):
+    
+    with brownie.reverts("Not governance nor fund manager"):
+        fund_through_proxy.setRelayer(accounts[1], {'from': accounts[3]})
 
 def test_set_deposit_limit(fund_through_proxy, accounts):
     fund_through_proxy.setDepositLimit(10, {'from': accounts[0]})

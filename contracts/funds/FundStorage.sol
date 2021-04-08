@@ -13,6 +13,8 @@ contract FundStorage is Initializable, SetGetAssembly {
         0x15b9fa1072bc4b2cdb762a49a2c7917b8b3af02283e37ffd41d0fccd4eef0d48;
     bytes32 internal constant _FUND_MANAGER_SLOT =
         0x670552e214026020a9e6caa820519c7f879b21bd75b5571387d6a9cf8f94bd18;
+    bytes32 internal constant _RELAYER_SLOT =
+        0x84e8c6b8f2281d51d9f683d351409724c3caa7848051aeb9d92c106ab36cc24c;
     bytes32 internal constant _PLATFORM_REWARDS_SLOT =
         0x92260bfe68dd0f8a9f5439b75466781ba1ce44523ed1a3026a73eada49072e65;
     bytes32 internal constant _DEPOSIT_LIMIT_SLOT =
@@ -75,6 +77,16 @@ contract FundStorage is Initializable, SetGetAssembly {
                     uint256(
                         keccak256(
                             "eip1967.mesh.finance.fundStorage.fundManager"
+                        )
+                    ) - 1
+                )
+        );
+        assert(
+            _RELAYER_SLOT ==
+                bytes32(
+                    uint256(
+                        keccak256(
+                            "eip1967.mesh.finance.fundStorage.relayer"
                         )
                     ) - 1
                 )
@@ -226,12 +238,14 @@ contract FundStorage is Initializable, SetGetAssembly {
         uint256 _underlyingUnit,
         uint8 _decimals,
         address _fundManager,
+        address _relayer,
         address _platformRewards
     ) public initializer {
         _setUnderlying(_underlying);
         _setUnderlyingUnit(_underlyingUnit);
         _setDecimals(_decimals);
         _setFundManager(_fundManager);
+        _setRelayer(_relayer);
         _setPlatformRewards(_platformRewards);
         _setDepositLimit(0);
         _setDepositLimitTxMax(0);
@@ -278,6 +292,14 @@ contract FundStorage is Initializable, SetGetAssembly {
 
     function _fundManager() internal view returns (address) {
         return getAddress(_FUND_MANAGER_SLOT);
+    }
+
+    function _setRelayer(address _relayer) internal {
+        setAddress(_RELAYER_SLOT, _relayer);
+    }
+
+    function _relayer() internal view returns (address) {
+        return getAddress(_RELAYER_SLOT);
     }
 
     function _setPlatformRewards(address _rewards) internal {

@@ -102,6 +102,7 @@ contract Fund is
             _underlyingUnit,
             _decimals,
             _governance, // fund manager is initialized as governance
+            _governance, // relayer is initialized as governance
             _governance // rewards contract is initialized as governance
         );
     }
@@ -114,6 +115,14 @@ contract Fund is
         _;
     }
 
+    modifier onlyFundManagerOrGovernanceOrRelayer() {
+        require(
+            (_governance() == msg.sender) || (_fundManager() == msg.sender) || (_relayer() == msg.sender),
+            "Not governance nor fund manager"
+        );
+        _;
+    }
+
     modifier whenDepositsNotPaused() {
         require(!_depositsPaused(), "Deposits are paused");
         _;
@@ -121,6 +130,10 @@ contract Fund is
 
     function fundManager() external view returns (address) {
         return _fundManager();
+    }
+
+    function relayer() external view returns (address) {
+        return _relayer();
     }
 
     function underlying() external view override returns (address) {
@@ -423,7 +436,7 @@ contract Fund is
     function doHardWork()
         external
         whenStrategyDefined
-        onlyFundManagerOrGovernance
+        onlyFundManagerOrGovernanceOrRelayer
     {
         if (_lastHardworkTimestamp() > 0) {
             processFees();
@@ -663,6 +676,13 @@ contract Fund is
         onlyFundManagerOrGovernance
     {
         _setFundManager(newFundManager);
+    }
+
+    function setRelayer(address newRelayer)
+        external
+        onlyFundManagerOrGovernance
+    {
+        _setRelayer(newRelayer);
     }
 
     function setPlatformRewards(address newRewards) external onlyGovernance {
