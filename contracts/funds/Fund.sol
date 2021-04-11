@@ -93,7 +93,7 @@ contract Fund is
 
         Governable.initializeGovernance(_governance);
 
-        uint8 _decimals = ERC20Upgradeable(address(_underlying)).decimals();
+        uint8 _decimals = ERC20Upgradeable(_underlying).decimals();
 
         uint256 _underlyingUnit = 10**uint256(_decimals);
 
@@ -117,7 +117,9 @@ contract Fund is
 
     modifier onlyFundManagerOrGovernanceOrRelayer() {
         require(
-            (_governance() == msg.sender) || (_fundManager() == msg.sender) || (_relayer() == msg.sender),
+            (_governance() == msg.sender) ||
+                (_fundManager() == msg.sender) ||
+                (_relayer() == msg.sender),
             "Not governance nor fund manager"
         );
         _;
@@ -182,10 +184,6 @@ contract Fund is
      */
     function underlyingBalanceWithInvestment() internal view returns (uint256) {
         uint256 underlyingBalance = underlyingBalanceInFund();
-        if (getStrategyCount() == 0) {
-            // initial state, when not set
-            return underlyingBalance;
-        }
         for (uint256 i; i < getStrategyCount(); i++) {
             underlyingBalance = underlyingBalance.add(
                 IStrategy(strategyList[i]).investedUnderlyingBalance()
@@ -214,8 +212,17 @@ contract Fund is
         return underlyingBalanceWithInvestment();
     }
 
+    function _underlyingFromShares(uint256 numShares)
+        internal
+        view
+        returns (uint256)
+    {
+        return
+            underlyingBalanceWithInvestment().mul(numShares).div(totalSupply());
+    }
+
     /*
-     * get the user's share (in underlying)
+     * get the user's balance (in underlying)
      */
     function underlyingBalanceWithInvestmentForHolder(address holder)
         external
@@ -226,10 +233,7 @@ contract Fund is
         if (totalSupply() == 0) {
             return 0;
         }
-        return
-            underlyingBalanceWithInvestment().mul(balanceOf(holder)).div(
-                totalSupply()
-            );
+        return _underlyingFromShares(balanceOf(holder));
     }
 
     function isActiveStrategy(address strategy) internal view returns (bool) {
@@ -251,10 +255,11 @@ contract Fund is
             "This strategy is already active in this fund"
         );
         require(weightage > 0, "The weightage should be greater than 0");
+        uint256 totalWeightInStrategies =
+            _totalWeightInStrategies().add(weightage);
         require(
-            _totalWeightInStrategies().add(weightage) <=
-                _maxInvestmentInStrategies(),
-            "Total investment can't be above 90%"
+            totalWeightInStrategies <= _maxInvestmentInStrategies(),
+            "Total investment can't be above max allowed"
         );
         require(
             performanceFeeStrategy <= MAX_PERFORMANCE_FEE_STRATEGY,
@@ -262,7 +267,7 @@ contract Fund is
         );
 
         strategies[newStrategy].weightage = weightage;
-        _setTotalWeightInStrategies(_totalWeightInStrategies().add(weightage));
+        _setTotalWeightInStrategies(totalWeightInStrategies);
         // solhint-disable-next-line not-rely-on-time
         strategies[newStrategy].activation = block.timestamp;
         strategies[newStrategy].indexInList = getStrategyCount();
@@ -271,7 +276,7 @@ contract Fund is
         _setShouldRebalance(true);
 
         IERC20(_underlying()).safeApprove(newStrategy, 0);
-        IERC20(_underlying()).safeApprove(newStrategy, uint256(~0));
+        IERC20(_underlying()).safeApprove(newStrategy, type(uint256).max);
 
         emit StrategyAdded(newStrategy, weightage, performanceFeeStrategy);
     }
@@ -323,18 +328,16 @@ contract Fund is
             "This strategy is not active in this fund"
         );
         require(newWeightage > 0, "The weightage should be greater than 0");
-        require(
+        uint256 totalWeightInStrategies =
             _totalWeightInStrategies()
                 .sub(strategies[activeStrategy].weightage)
-                .add(newWeightage) <= _maxInvestmentInStrategies(),
-            "Total investment can't be above 90%"
+                .add(newWeightage);
+        require(
+            totalWeightInStrategies <= _maxInvestmentInStrategies(),
+            "Total investment can't be above max allowed"
         );
 
-        _setTotalWeightInStrategies(
-            _totalWeightInStrategies()
-                .sub(strategies[activeStrategy].weightage)
-                .add(newWeightage)
-        );
+        _setTotalWeightInStrategies(totalWeightInStrategies);
         strategies[activeStrategy].weightage = newWeightage;
         _setShouldRebalance(true);
 
@@ -369,12 +372,6 @@ contract Fund is
 
     function processFees() internal {
         uint256 profitToFund = 0;
-        uint256 platformFee =
-            // solhint-disable-next-line not-rely-on-time
-            (_totalInvested() * (block.timestamp - _lastHardworkTimestamp()))
-                .mul(_platformFee())
-                .div(MAX_BPS)
-                .div(SECS_PER_YEAR);
 
         for (uint256 i; i < getStrategyCount(); i++) {
             address strategy = strategyList[i];
@@ -419,6 +416,14 @@ contract Fund is
             );
             emit FundManagerRewards(profitToFund, fundManagerFee);
         }
+
+        uint256 platformFee =
+            // solhint-disable-next-line not-rely-on-time
+            (_totalInvested() * (block.timestamp - _lastHardworkTimestamp()))
+                .mul(_platformFee())
+                .div(MAX_BPS)
+                .div(SECS_PER_YEAR);
+
         if (platformFee > 0 && platformFee < underlyingBalanceInFund()) {
             IERC20(_underlying()).safeTransfer(_platformRewards(), platformFee);
             emit PlatformRewards(
@@ -465,11 +470,12 @@ contract Fund is
                 ? underlyingBalanceInFund().sub(lastReserve)
                 : 0;
 
-        if (availableAmountToInvest <= 0) {
+        if (availableAmountToInvest == 0) {
             return;
         }
 
         _setTotalAccounted(_totalAccounted().add(availableAmountToInvest));
+        uint256 totalInvested = 0;
 
         for (uint256 i; i < getStrategyCount(); i++) {
             address strategy = strategyList[i];
@@ -482,9 +488,7 @@ contract Fund is
                     strategy,
                     availableAmountForStrategy
                 );
-                _setTotalInvested(
-                    _totalInvested().add(availableAmountForStrategy)
-                );
+                totalInvested = totalInvested.add(availableAmountForStrategy);
                 emit InvestInStrategy(strategy, availableAmountForStrategy);
             }
 
@@ -493,6 +497,7 @@ contract Fund is
             strategies[strategy].lastBalance = IStrategy(strategy)
                 .investedUnderlyingBalance();
         }
+        _setTotalInvested(totalInvested);
     }
 
     function doHardWorkWithRebalance() internal {
@@ -563,6 +568,7 @@ contract Fund is
         nonReentrant
         whenDepositsNotPaused
     {
+        require(holder != ZERO_ADDRESS, "holder must be defined");
         _deposit(amount, msg.sender, holder);
     }
 
@@ -572,7 +578,6 @@ contract Fund is
         address beneficiary
     ) internal {
         require(amount > 0, "Cannot deposit 0");
-        require(beneficiary != ZERO_ADDRESS, "holder must be defined");
 
         if (_depositLimit() > 0) {
             // if deposit limit is 0, then there is no deposit limit
@@ -615,13 +620,9 @@ contract Fund is
         require(totalSupply() > 0, "Fund has no shares");
         require(numberOfShares > 0, "numberOfShares must be greater than 0");
 
-        uint256 totalSupply = totalSupply();
-        _burn(msg.sender, numberOfShares);
-
         uint256 underlyingAmountToWithdraw =
-            underlyingBalanceWithInvestment().mul(numberOfShares).div(
-                totalSupply
-            );
+            _underlyingFromShares(numberOfShares);
+        _burn(msg.sender, numberOfShares);
 
         if (underlyingAmountToWithdraw > underlyingBalanceInFund()) {
             uint256 missing =
@@ -646,20 +647,21 @@ contract Fund is
 
         uint256 withdrawalFee =
             underlyingAmountToWithdraw.mul(_withdrawalFee()).div(MAX_BPS);
-        underlyingAmountToWithdraw = underlyingAmountToWithdraw.sub(
-            withdrawalFee
-        );
 
-        IERC20(_underlying()).safeTransfer(
-            msg.sender,
-            underlyingAmountToWithdraw
-        );
         if (withdrawalFee > 0) {
             IERC20(_underlying()).safeTransfer(
                 _platformRewards(),
                 withdrawalFee
             );
+            underlyingAmountToWithdraw = underlyingAmountToWithdraw.sub(
+                withdrawalFee
+            );
         }
+
+        IERC20(_underlying()).safeTransfer(
+            msg.sender,
+            underlyingAmountToWithdraw
+        );
 
         emit Withdraw(msg.sender, underlyingAmountToWithdraw, withdrawalFee);
     }

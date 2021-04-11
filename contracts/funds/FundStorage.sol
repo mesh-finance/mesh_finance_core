@@ -85,9 +85,7 @@ contract FundStorage is Initializable, SetGetAssembly {
             _RELAYER_SLOT ==
                 bytes32(
                     uint256(
-                        keccak256(
-                            "eip1967.mesh.finance.fundStorage.relayer"
-                        )
+                        keccak256("eip1967.mesh.finance.fundStorage.relayer")
                     ) - 1
                 )
         );

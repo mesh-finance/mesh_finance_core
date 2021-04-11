@@ -20,6 +20,7 @@ def test_deposit(fund_through_proxy, accounts, token):
     fund_through_proxy.deposit(50, {'from': accounts[1]})
     
     assert fund_through_proxy.balanceOf(accounts[1]) == 50   ## zero shares initially, so same amount minted as deposit
+    assert fund_through_proxy.underlyingBalanceWithInvestmentForHolder(accounts[1]) == 50
     assert token.balanceOf(accounts[1]) == 50
 
 def test_deposit_event_fires(fund_through_proxy, accounts, token):

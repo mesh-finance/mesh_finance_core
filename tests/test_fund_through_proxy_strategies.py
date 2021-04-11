@@ -15,7 +15,7 @@ def test_add_strategy_zero_weightage(fund_through_proxy, accounts, profit_strate
         fund_through_proxy.addStrategy(profit_strategy_10, 0, 500, {'from': accounts[0]})
 
 def test_add_strategy_very_high_weightage(fund_through_proxy, accounts, profit_strategy_10):
-    with brownie.reverts("Total investment can't be above 90%"):
+    with brownie.reverts("Total investment can't be above max allowed"):
         fund_through_proxy.addStrategy(profit_strategy_10, 9500, 500, {'from': accounts[0]})
 
 def test_add_strategy_very_high_performance_fee(fund_through_proxy, accounts, profit_strategy_10):
@@ -91,7 +91,7 @@ def test_update_strategy_weightage_wrong_strategy(fund_through_proxy, accounts, 
 
 def test_update_strategy_weightage_very_high_weightage(fund_through_proxy, accounts, profit_strategy_10, profit_strategy_50):
     fund_through_proxy.addStrategy(profit_strategy_10, 5000, 500, {'from': accounts[0]})
-    with brownie.reverts("Total investment can't be above 90%"):
+    with brownie.reverts("Total investment can't be above max allowed"):
         fund_through_proxy.updateStrategyWeightage(profit_strategy_10, 9500, {'from': accounts[0]})
 
 def test_update_strategy_weightage(fund_through_proxy, accounts, profit_strategy_10, profit_strategy_50):

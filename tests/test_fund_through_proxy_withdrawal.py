@@ -97,3 +97,24 @@ def test_withdrawal_with_withdrawal_fee_and_changed_rewards(fund_through_proxy, 
     assert token.balanceOf(accounts[1]) == intial_balance_for_account - expected_fee
     assert token.balanceOf(accounts[0]) == intial_balance_for_governance
     assert token.balanceOf(accounts[5]) == expected_fee
+
+
+def test_large_withdrawal_after_hard_work(fund_through_proxy, accounts, token, profit_strategy_10, profit_strategy_50):
+    token.mint(accounts[1], 10000000, {'from': accounts[0]})
+    intial_balance_for_governance = token.balanceOf(accounts[0])
+    intial_balance_for_account = token.balanceOf(accounts[1])
+    token.approve(fund_through_proxy, 5000000, {'from': accounts[1]})
+    fund_through_proxy.deposit(5000000, {'from': accounts[1]})
+
+    token.grantRole(brownie.web3.keccak(text="MINTER_ROLE"), profit_strategy_10, {'from': accounts[0]})
+    fund_through_proxy.addStrategy(profit_strategy_10, 5000, 500, {'from': accounts[0]})
+    token.grantRole(brownie.web3.keccak(text="MINTER_ROLE"), profit_strategy_50, {'from': accounts[0]})
+    fund_through_proxy.addStrategy(profit_strategy_50, 2000, 500, {'from': accounts[0]})
+
+    fund_through_proxy.doHardWork({'from': accounts[0]})
+
+    fund_through_proxy.withdraw(4000000, {'from': accounts[1]})
+
+    assert fund_through_proxy.balanceOf(accounts[1]) == 1000000
+    assert 9000000-1 <= token.balanceOf(accounts[1]) <= 9000000+1
+    assert token.balanceOf(fund_through_proxy) == 0
