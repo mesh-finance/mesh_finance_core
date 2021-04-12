@@ -4,6 +4,7 @@ pragma solidity 0.6.12;
 import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/token/ERC20/IERC20.sol";
 import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/presets/ERC20PresetMinterPauser.sol";
 import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/utils/Address.sol";
+import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/math/Math.sol";
 import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/math/SafeMath.sol";
 import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/token/ERC20/SafeERC20.sol";
 import "../../interfaces/IStrategy.sol";
@@ -99,7 +100,9 @@ contract ProfitStrategy is IStrategy {
         override
         onlyFundOrGovernance
     {
-        IERC20(underlying).safeTransfer(fund, amount);
+        uint256 underlyingBalance = IERC20(underlying).balanceOf(address(this));
+        uint256 amountTowithdraw = Math.min(underlyingBalance, amount);
+        IERC20(underlying).safeTransfer(fund, amountTowithdraw);
         accountedBalance = IERC20(underlying).balanceOf(address(this));
     }
 

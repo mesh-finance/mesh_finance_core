@@ -627,14 +627,20 @@ contract Fund is
         if (underlyingAmountToWithdraw > underlyingBalanceInFund()) {
             uint256 missing =
                 underlyingAmountToWithdraw.sub(underlyingBalanceInFund());
+            uint256 missingCarryOver;
             for (uint256 i; i < getStrategyCount(); i++) {
                 if (isActiveStrategy(strategyList[i])) {
+                    uint256 balanceBefore = underlyingBalanceInFund();
                     uint256 weightage = strategies[strategyList[i]].weightage;
                     uint256 missingforStrategy =
-                        missing.mul(weightage).div(_totalWeightInStrategies());
+                        (missing.mul(weightage).div(_totalWeightInStrategies()))
+                            .add(missingCarryOver);
                     IStrategy(strategyList[i]).withdrawToFund(
                         missingforStrategy
                     );
+                    missingCarryOver = missingforStrategy
+                        .add(balanceBefore)
+                        .sub(underlyingBalanceInFund());
                 }
             }
             // recalculate to improve accuracy
