@@ -190,7 +190,7 @@ contract YearnV2StrategyBase is IStrategy {
     {
         uint256 shares = IERC20(yVault).balanceOf(address(this));
         uint256 price = IYVaultV2(yVault).pricePerShare();
-        uint256 precision = 10**18;
+        uint256 precision = 10**(IYVaultV2(yVault).decimals());
         uint256 underlyingBalanceinYVault = shares.mul(price).div(precision);
         return
             underlyingBalanceinYVault.add(
@@ -206,8 +206,8 @@ contract YearnV2StrategyBase is IStrategy {
         view
         returns (uint256)
     {
-        // 1 yToken = this much underlying, 10 ** 18 precision for all tokens
+        uint256 precision = 10**(IYVaultV2(yVault).decimals());
         return
-            underlyingAmount.mul(10**18).div(IYVaultV2(yVault).pricePerShare());
+            underlyingAmount.mul(precision).div(IYVaultV2(yVault).pricePerShare());
     }
 }

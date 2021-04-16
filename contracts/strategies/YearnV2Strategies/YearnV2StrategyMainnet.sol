@@ -26,7 +26,7 @@ contract YearnV2StrategyMainnet is YearnV2StrategyBase {
         YearnV2StrategyBase(_fund, address(0), 0)
     {
         yVaults[dai] = yvdai;
-        yVaults[usdc] = yvdai;
+        yVaults[usdc] = yvusdc;
         yVault = yVaults[underlying];
         require(
             yVault != address(0),
