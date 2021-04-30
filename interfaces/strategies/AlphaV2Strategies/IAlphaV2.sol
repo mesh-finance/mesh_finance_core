@@ -7,6 +7,8 @@ interface IAlphaV2 {
     function balanceOf(address) external view returns (uint256);
 
     // AlphaV2 view interface
+    function uToken() external view returns (address);
+
     function cToken() external view returns (address);
 
     // VaultV2 user interface

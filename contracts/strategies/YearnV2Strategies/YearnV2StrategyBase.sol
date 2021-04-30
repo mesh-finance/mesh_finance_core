@@ -14,53 +14,53 @@ import "../../../interfaces/IGovernable.sol";
 /**
  * This strategy takes an asset (DAI, USDC), deposits into yv2 vault. Currently building only for DAI.
  */
-contract YearnV2StrategyBase is IStrategy {
-    enum TokenIndex {DAI, USDC}
-
+abstract contract YearnV2StrategyBase is IStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
-    address public override underlying;
-    address public override fund;
-    address public override creator;
-
-    // the matching enum record used to determine the index
-    TokenIndex tokenIndex;
+    address public immutable override underlying;
+    address public immutable override fund;
+    address public immutable override creator;
 
     // the y-vault corresponding to the underlying asset
-    address public yVault;
+    address public immutable yVault;
 
     // these tokens cannot be claimed by the governance
     mapping(address => bool) public canNotSweep;
 
     bool public investActivated;
 
-    constructor(
-        address _fund,
-        address _yVault,
-        uint256 _tokenIndex
-    ) public {
+    constructor(address _fund, address _yVault) public {
+        require(_fund != address(0), "Fund cannot be empty");
+        require(_yVault != address(0), "Yearn Vault cannot be empty");
         fund = _fund;
-        underlying = IFund(fund).underlying();
-        tokenIndex = TokenIndex(_tokenIndex);
+        address _underlying = IFund(_fund).underlying();
+        require(
+            _underlying == IYVaultV2(_yVault).token(),
+            "Underlying do not match"
+        );
+        underlying = _underlying;
         yVault = _yVault;
         creator = msg.sender;
 
+        // approve max amount to save on gas costs later
+        IERC20(_underlying).safeApprove(_yVault, type(uint256).max);
+
         // restricted tokens, can not be swept
-        canNotSweep[underlying] = true;
-        canNotSweep[yVault] = true;
+        canNotSweep[_underlying] = true;
+        canNotSweep[_yVault] = true;
 
         investActivated = true;
     }
 
-    function governance() internal view returns (address) {
+    function _governance() internal view returns (address) {
         return IGovernable(fund).governance();
     }
 
     modifier onlyFundOrGovernance() {
         require(
-            msg.sender == fund || msg.sender == governance(),
+            msg.sender == fund || msg.sender == _governance(),
             "The sender has to be the governance or fund"
         );
         _;
@@ -115,6 +115,12 @@ contract YearnV2StrategyBase is IStrategy {
             shareValueFromUnderlying(
                 underlyingAmount.sub(underlyingBalanceBefore)
             );
+        uint256 totalShares = IYVaultV2(yVault).balanceOf(address(this));
+
+        if (shares > totalShares) {
+            //can't withdraw more than we have
+            shares = totalShares;
+        }
         IYVaultV2(yVault).withdraw(shares);
 
         // we can transfer the asset to the fund
@@ -142,7 +148,7 @@ contract YearnV2StrategyBase is IStrategy {
     /**
      * Invests all underlying assets into our yv2 vault.
      */
-    function investAllUnderlying() internal {
+    function _investAllUnderlying() internal {
         if (!investActivated) {
             return;
         }
@@ -154,8 +160,6 @@ contract YearnV2StrategyBase is IStrategy {
 
         uint256 underlyingBalance = IERC20(underlying).balanceOf(address(this));
         if (underlyingBalance > 0) {
-            IERC20(underlying).safeApprove(yVault, 0);
-            IERC20(underlying).safeApprove(yVault, underlyingBalance);
             // deposits the entire balance to yv2 vault
             IYVaultV2(yVault).deposit(underlyingBalance);
         }
@@ -164,13 +168,13 @@ contract YearnV2StrategyBase is IStrategy {
     /**
      * The hard work only invests all underlying assets
      */
-    function doHardWork() public override onlyFundOrGovernance {
-        investAllUnderlying();
+    function doHardWork() external override onlyFundOrGovernance {
+        _investAllUnderlying();
     }
 
     // no tokens apart from underlying should be sent to this contract. Any tokens that are sent here by mistake are recoverable by governance
     function sweep(address _token, address _sweepTo) external {
-        require(governance() == msg.sender, "Not governance");
+        require(_governance() == msg.sender, "Not governance");
         require(!canNotSweep[_token], "Token is restricted");
         IERC20(_token).safeTransfer(
             _sweepTo,
@@ -208,6 +212,8 @@ contract YearnV2StrategyBase is IStrategy {
     {
         uint256 precision = 10**(IYVaultV2(yVault).decimals());
         return
-            underlyingAmount.mul(precision).div(IYVaultV2(yVault).pricePerShare());
+            underlyingAmount.mul(precision).div(
+                IYVaultV2(yVault).pricePerShare()
+            );
     }
 }

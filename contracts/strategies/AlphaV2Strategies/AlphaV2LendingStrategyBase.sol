@@ -15,54 +15,57 @@ import "../../../interfaces/IGovernable.sol";
 /**
  * This strategy takes an asset (DAI, USDC), lends to AlphaV2 Lending Box.
  */
-contract AlphaV2LendingStrategyBase is IStrategy {
-    enum TokenIndex {DAI, USDC}
-
+abstract contract AlphaV2LendingStrategyBase is IStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
-    address public override underlying;
-    address public override fund;
-    address public override creator;
-
-    // the matching enum record used to determine the index
-    TokenIndex tokenIndex;
+    address public immutable override underlying;
+    address public immutable override fund;
+    address public immutable override creator;
 
     // the alphasafebox corresponding to the underlying asset
-    address public aBox;
+    address public immutable aBox;
+
+    // the cToken corresponding to the alphasafebox
+    address public immutable cToken;
 
     // these tokens cannot be claimed by the governance
     mapping(address => bool) public canNotSweep;
 
     bool public investActivated;
 
-    constructor(
-        address _fund,
-        address _aBox,
-        uint256 _tokenIndex
-    ) public {
+    constructor(address _fund, address _aBox) public {
         require(_fund != address(0), "Fund cannot be empty");
+        require(_aBox != address(0), "Alpha Safebox cannot be empty");
         fund = _fund;
-        underlying = IFund(fund).underlying();
-        tokenIndex = TokenIndex(_tokenIndex);
+        address _underlying = IFund(_fund).underlying();
+        require(
+            _underlying == IAlphaV2(_aBox).uToken(),
+            "Underlying do not match"
+        );
+        underlying = _underlying;
         aBox = _aBox;
+        cToken = IAlphaV2(_aBox).cToken();
         creator = msg.sender;
 
+        // approve max amount to save on gas costs later
+        IERC20(_underlying).safeApprove(_aBox, type(uint256).max);
+
         // restricted tokens, can not be swept
-        canNotSweep[underlying] = true;
-        canNotSweep[aBox] = true;
+        canNotSweep[_underlying] = true;
+        canNotSweep[_aBox] = true;
 
         investActivated = true;
     }
 
-    function governance() internal view returns (address) {
+    function _governance() internal view returns (address) {
         return IGovernable(fund).governance();
     }
 
     modifier onlyFundOrGovernance() {
         require(
-            msg.sender == fund || msg.sender == governance(),
+            msg.sender == fund || msg.sender == _governance(),
             "The sender has to be the governance or fund"
         );
         _;
@@ -116,6 +119,13 @@ contract AlphaV2LendingStrategyBase is IStrategy {
             shareValueFromUnderlying(
                 underlyingAmount.sub(underlyingBalanceBefore)
             );
+        uint256 totalShares = IAlphaV2(aBox).balanceOf(address(this));
+
+        if (shares > totalShares) {
+            //can't withdraw more than we have
+            shares = totalShares;
+        }
+
         IAlphaV2(aBox).withdraw(shares);
 
         // we can transfer the asset to the fund
@@ -143,15 +153,13 @@ contract AlphaV2LendingStrategyBase is IStrategy {
     /**
      * Invests all underlying assets into our Alpha V2 Lending Box.
      */
-    function investAllUnderlying() internal {
+    function _investAllUnderlying() internal {
         if (!investActivated) {
             return;
         }
 
         uint256 underlyingBalance = IERC20(underlying).balanceOf(address(this));
         if (underlyingBalance > 0) {
-            IERC20(underlying).safeApprove(aBox, 0);
-            IERC20(underlying).safeApprove(aBox, underlyingBalance);
             // deposits the entire balance to Alpha V2 Lending Box
             IAlphaV2(aBox).deposit(underlyingBalance);
         }
@@ -160,13 +168,13 @@ contract AlphaV2LendingStrategyBase is IStrategy {
     /**
      * The hard work only invests all underlying assets
      */
-    function doHardWork() public override onlyFundOrGovernance {
-        investAllUnderlying();
+    function doHardWork() external override onlyFundOrGovernance {
+        _investAllUnderlying();
     }
 
     // no tokens apart from underlying should be sent to this contract. Any tokens that are sent here by mistake are recoverable by governance
     function sweep(address _token, address _sweepTo) external {
-        require(governance() == msg.sender, "Not governance");
+        require(_governance() == msg.sender, "Not governance");
         require(!canNotSweep[_token], "Token is restricted");
         IERC20(_token).safeTransfer(
             _sweepTo,
@@ -195,7 +203,6 @@ contract AlphaV2LendingStrategyBase is IStrategy {
         returns (uint256)
     {
         uint256 shares = IERC20(aBox).balanceOf(address(this));
-        address cToken = IAlphaV2(aBox).cToken();
         uint256 exchangeRate = ICErc20(cToken).exchangeRateStored();
         uint256 precision = 10**18;
         uint256 underlyingBalanceinABox =
@@ -216,7 +223,7 @@ contract AlphaV2LendingStrategyBase is IStrategy {
     {
         return
             underlyingAmount.mul(10**18).div(
-                ICErc20(IAlphaV2(aBox).cToken()).exchangeRateStored()
+                ICErc20(cToken).exchangeRateStored()
             );
     }
 }

@@ -5,9 +5,12 @@ pragma solidity ^0.6.12;
 interface IYVaultV2 {
     // ERC20 part
     function balanceOf(address) external view returns (uint256);
+
     function decimals() external view returns (uint256);
 
     // VaultV2 view interface
+    function token() external view returns (address);
+
     function emergencyShutdown() external view returns (bool);
 
     function pricePerShare() external view returns (uint256);
