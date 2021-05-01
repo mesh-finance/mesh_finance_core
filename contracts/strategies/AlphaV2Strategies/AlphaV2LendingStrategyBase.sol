@@ -32,13 +32,16 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
     address public immutable cToken;
 
     // Alpha token as rewards
-    address public constant rewardToken = address(0xa1faa113cbE53436Df28FF0aEe54275c13B40975);
+    address public constant rewardToken =
+        address(0xa1faa113cbE53436Df28FF0aEe54275c13B40975);
 
     // Uniswap V2s router to liquidate Alpha rewards to underlying
-    address internal constant _uniswapRouter = address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+    address internal constant _uniswapRouter =
+        address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
 
     // WETH serves as path to convert rewards to underlying
-    address internal constant WETH = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+    address internal constant WETH =
+        address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
     // these tokens cannot be claimed by the governance
     mapping(address => bool) public canNotSweep;
@@ -193,7 +196,11 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
         );
     }
 
-    function _getPath(address _from, address _to) internal pure returns (address[] memory) {
+    function _getPath(address _from, address _to)
+        internal
+        pure
+        returns (address[] memory)
+    {
         address[] memory path;
         if (_from == WETH || _to == WETH) {
             path = new address[](2);
@@ -208,32 +215,42 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
         return path;
     }
 
-    function _liquidateRewardsAndReinvest() internal {
+    function _liquidateRewardsAndReinvest(uint256 minUnderlyingExpected)
+        internal
+    {
         uint256 rewardAmount = IERC20(rewardToken).balanceOf(address(this));
         if (rewardAmount != 0) {
-            IUniswapV2Router02 uniswapRouter = IUniswapV2Router02(_uniswapRouter);
+            IUniswapV2Router02 uniswapRouter =
+                IUniswapV2Router02(_uniswapRouter);
             address[] memory path = _getPath(rewardToken, underlying);
-            uint256 underlyingAmountOut = uniswapRouter.getAmountsOut(rewardAmount, path)[path.length - 1];
+            uint256 underlyingAmountOut =
+                uniswapRouter.getAmountsOut(rewardAmount, path)[
+                    path.length - 1
+                ];
             if (underlyingAmountOut != 0) {
                 IERC20(rewardToken).safeApprove(_uniswapRouter, rewardAmount);
-                uniswapRouter.swapExactTokensForTokens(rewardAmount, 1, path, address(this), now + 30);
+                uniswapRouter.swapExactTokensForTokens(
+                    rewardAmount,
+                    minUnderlyingExpected,
+                    path,
+                    address(this),
+                    now + 30
+                );
                 _investAllUnderlying();
             }
         }
     }
 
-
     /**
-     * This liquidates all the reward token in this strategy. 
-     * This doesn't claim the rewards, they need to be claimed separately.
+     * This liquidates all the reward token in this strategy.
+     * This doesn't claim the rewards, they need to be claimed externally.
      */
-    function liquidateRewardsAndReinvest()
+    function liquidateRewardsAndReinvest(uint256 minUnderlyingExpected)
         external
         onlyFundOrGovernance
     {
-        _liquidateRewardsAndReinvest();
+        _liquidateRewardsAndReinvest(minUnderlyingExpected);
     }
-
 
     /**
      * Returns the underlying invested balance. This is the underlying amount based on yield bearing token balance,
