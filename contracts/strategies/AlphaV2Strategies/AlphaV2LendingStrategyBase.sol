@@ -8,6 +8,7 @@ import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/utils/Address.sol";
 import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/token/ERC20/SafeERC20.sol";
 import "../../../interfaces/strategies/AlphaV2Strategies/IAlphaV2.sol";
 import "../../../interfaces/strategies/AlphaV2Strategies/ICErc20.sol";
+import "../../../interfaces/uniswap/IUniswapV2Router02.sol";
 import "../../../interfaces/IFund.sol";
 import "../../../interfaces/IStrategy.sol";
 import "../../../interfaces/IGovernable.sol";
@@ -29,6 +30,15 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
 
     // the cToken corresponding to the alphasafebox
     address public immutable cToken;
+
+    // Alpha token as rewards
+    address public constant rewardToken = address(0xa1faa113cbE53436Df28FF0aEe54275c13B40975);
+
+    // Uniswap V2s router to liquidate Alpha rewards to underlying
+    address internal constant _uniswapRouter = address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+
+    // WETH serves as path to convert rewards to underlying
+    address internal constant WETH = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
     // these tokens cannot be claimed by the governance
     mapping(address => bool) public canNotSweep;
@@ -55,6 +65,7 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
         // restricted tokens, can not be swept
         canNotSweep[_underlying] = true;
         canNotSweep[_aBox] = true;
+        canNotSweep[rewardToken] = true;
 
         investActivated = true;
     }
@@ -116,7 +127,7 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
         }
 
         uint256 shares =
-            shareValueFromUnderlying(
+            _shareValueFromUnderlying(
                 underlyingAmount.sub(underlyingBalanceBefore)
             );
         uint256 totalShares = IAlphaV2(aBox).balanceOf(address(this));
@@ -182,15 +193,47 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
         );
     }
 
+    function _getPath(address _from, address _to) internal pure returns (address[] memory) {
+        address[] memory path;
+        if (_from == WETH || _to == WETH) {
+            path = new address[](2);
+            path[0] = _from;
+            path[1] = _to;
+        } else {
+            path = new address[](3);
+            path[0] = _from;
+            path[1] = WETH;
+            path[2] = _to;
+        }
+        return path;
+    }
+
+    function _liquidateRewardsAndReinvest() internal {
+        uint256 rewardAmount = IERC20(rewardToken).balanceOf(address(this));
+        if (rewardAmount != 0) {
+            IUniswapV2Router02 uniswapRouter = IUniswapV2Router02(_uniswapRouter);
+            address[] memory path = _getPath(rewardToken, underlying);
+            uint256 underlyingAmountOut = uniswapRouter.getAmountsOut(rewardAmount, path)[path.length - 1];
+            if (underlyingAmountOut != 0) {
+                IERC20(rewardToken).safeApprove(_uniswapRouter, rewardAmount);
+                uniswapRouter.swapExactTokensForTokens(rewardAmount, 1, path, address(this), now + 30);
+                _investAllUnderlying();
+            }
+        }
+    }
+
+
     /**
-     * Keeping this here as I did not find how to get totalReward
+     * This liquidates all the reward token in this strategy. 
+     * This doesn't claim the rewards, they need to be claimed separately.
      */
-    function claim(uint256 totalReward, bytes32[] memory proof)
+    function liquidateRewardsAndReinvest()
         external
         onlyFundOrGovernance
     {
-        IAlphaV2(aBox).claim(totalReward, proof);
+        _liquidateRewardsAndReinvest();
     }
+
 
     /**
      * Returns the underlying invested balance. This is the underlying amount based on yield bearing token balance,
@@ -216,7 +259,7 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
     /**
      * Returns the value of the underlying token in aBox ibToken
      */
-    function shareValueFromUnderlying(uint256 underlyingAmount)
+    function _shareValueFromUnderlying(uint256 underlyingAmount)
         internal
         view
         returns (uint256)

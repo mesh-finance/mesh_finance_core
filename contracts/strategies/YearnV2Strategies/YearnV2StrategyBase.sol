@@ -112,7 +112,7 @@ abstract contract YearnV2StrategyBase is IStrategy {
         }
 
         uint256 shares =
-            shareValueFromUnderlying(
+            _shareValueFromUnderlying(
                 underlyingAmount.sub(underlyingBalanceBefore)
             );
         uint256 totalShares = IYVaultV2(yVault).balanceOf(address(this));
@@ -205,7 +205,7 @@ abstract contract YearnV2StrategyBase is IStrategy {
     /**
      * Returns the value of the underlying token in yToken
      */
-    function shareValueFromUnderlying(uint256 underlyingAmount)
+    function _shareValueFromUnderlying(uint256 underlyingAmount)
         internal
         view
         returns (uint256)
