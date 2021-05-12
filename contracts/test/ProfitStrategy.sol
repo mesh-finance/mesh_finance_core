@@ -16,6 +16,9 @@ contract ProfitStrategy is IStrategy {
     using Address for address;
     using SafeMath for uint256;
 
+    string public constant override name = "ProfitStrategy";
+    string public constant override version = "V1";
+
     uint256 internal constant MAX_BPS = 10000; // 100% in basis points
 
     address public override underlying;
