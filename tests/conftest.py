@@ -90,3 +90,6 @@ def fund_usdc_through_proxy(usdc,usdc_holder,fund_factory, fund, token, accounts
 def profit_yearnstrategy (YearnV2StrategyUSDC,fund_usdc_through_proxy,accounts):
     return YearnV2StrategyUSDC.deploy(fund_usdc_through_proxy, {'from': accounts[0]})
 
+@pytest.fixture(scope="module")
+def profit_bentoboxstrategy (BentoBoxStrategyUSDC,fund_usdc_through_proxy,accounts):
+    return BentoBoxStrategyUSDC.deploy(fund_usdc_through_proxy, {'from': accounts[0]})
