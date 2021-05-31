@@ -7,9 +7,17 @@ interface IBentoBox {
     function balanceOf(address,address) external view returns (uint256);
 
 
-    function toShare() external view returns (uint256);
+     function toShare(
+        address token,
+        uint256 amount,
+        bool roundUp
+    ) external view returns (uint256);
 
-    function toAmount() external view returns (uint256);
+    function toAmount(
+        address token,
+        uint256 share,
+        bool roundUp
+    ) external view returns (uint256);
 
     function registerProtocol() external;
 

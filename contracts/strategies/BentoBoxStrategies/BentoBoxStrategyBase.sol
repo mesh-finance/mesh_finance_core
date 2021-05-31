@@ -192,13 +192,13 @@ abstract contract BentoBoxStrategyBase is IStrategy {
         override
         returns (uint256)
     {
-        uint256 shares = IERC20(bentobox).balanceOf(address(this));
-        uint256 price = IBentoBox(bentobox).toShare();
+        uint256 shares = IERC20(token).balanceOf(address(this));
+        uint256 price = IBentoBox(bentobox).toAmount(token,shares,false);
         uint256 precision = 10**(18);
         uint256 underlyingBalanceinYVault = shares.mul(price).div(precision);
-        return
+        return 
             underlyingBalanceinYVault.add(
-                IERC20(underlying).balanceOf(address(this))
+               IERC20(underlying).balanceOf(address(this))
             );
     }
 
@@ -213,7 +213,7 @@ abstract contract BentoBoxStrategyBase is IStrategy {
         uint256 precision = 10**(18);
         return
             underlyingAmount.mul(precision).div(
-                IBentoBox(bentobox).toShare()
+                IBentoBox(bentobox).toShare(token,underlyingAmount,false)
             );
     }
 }
