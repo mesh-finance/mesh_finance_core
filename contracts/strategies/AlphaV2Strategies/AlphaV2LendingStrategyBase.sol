@@ -234,6 +234,7 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
                     minUnderlyingExpected,
                     path,
                     address(this),
+                    // solhint-disable-next-line not-rely-on-time
                     now + 30
                 );
                 _investAllUnderlying();

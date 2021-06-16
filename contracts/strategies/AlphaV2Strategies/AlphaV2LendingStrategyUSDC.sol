@@ -16,5 +16,8 @@ contract AlphaV2LendingStrategyUSDC is AlphaV2LendingStrategyBase {
     constructor(address _fund)
         public
         AlphaV2LendingStrategyBase(_fund, _ibusdcv2)
-    {}
+    // solhint-disable-next-line no-empty-blocks
+    {
+
+    }
 }

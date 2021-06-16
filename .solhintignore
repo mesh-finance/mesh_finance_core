@@ -1,1 +1,3 @@
 interfaces/uniswap/
+interfaces/chainlink/
+interfaces/strategies/CurveStrategies

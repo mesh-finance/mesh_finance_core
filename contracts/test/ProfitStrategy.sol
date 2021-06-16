@@ -16,7 +16,9 @@ contract ProfitStrategy is IStrategy {
     using Address for address;
     using SafeMath for uint256;
 
+    // solhint-disable-next-line const-name-snakecase
     string public constant override name = "ProfitStrategy";
+    // solhint-disable-next-line const-name-snakecase
     string public constant override version = "V1";
 
     uint256 internal constant MAX_BPS = 10000; // 100% in basis points

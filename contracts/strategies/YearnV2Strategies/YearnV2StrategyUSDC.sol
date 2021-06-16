@@ -13,5 +13,6 @@ contract YearnV2StrategyUSDC is YearnV2StrategyBase {
     address internal constant _yvusdc =
         address(0x5f18C75AbDAe578b483E5F43f12a39cF75b973a9);
 
+    // solhint-disable-next-line no-empty-blocks
     constructor(address _fund) public YearnV2StrategyBase(_fund, _yvusdc) {}
 }

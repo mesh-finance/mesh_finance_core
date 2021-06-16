@@ -9,7 +9,7 @@
     "solhint-plugin-prettier": "^0.0.5"
   },
   "scripts": {
-    "solhint": "solhint -f table contracts/**/*.sol interfaces/**/*.sol",
+    "solhint": "solhint -f table contracts/**/*.sol contracts/**/**/*.sol interfaces/**/*.sol interfaces/**/**/*.sol libraries/**/*.sol libraries/**/**/*.sol",
     "lint": "pretty-quick --pattern '**/*.*(sol|json)' --verbose",
     "lint:check": "prettier --check **/*.sol **/*.json",
     "lint:fix": "pretty-quick --pattern '**/*.*(sol|json)' --staged --verbose"

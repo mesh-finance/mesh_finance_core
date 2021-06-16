@@ -120,7 +120,7 @@ contract Fund is
             (_governance() == msg.sender) ||
                 (_fundManager() == msg.sender) ||
                 (_relayer() == msg.sender),
-            "Not governance nor fund manager"
+            "Not governance nor fund manager nor relayer"
         );
         _;
     }
@@ -134,7 +134,7 @@ contract Fund is
         return _fundManager();
     }
 
-    function relayer() external view returns (address) {
+    function relayer() external view override returns (address) {
         return _relayer();
     }
 
