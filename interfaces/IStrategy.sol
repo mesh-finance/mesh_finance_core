@@ -2,9 +2,9 @@
 pragma solidity 0.6.12;
 
 interface IStrategy {
-    function name() external pure returns (string memory);
+    //function name() external pure returns (string memory);
 
-    function version() external pure returns (string memory);
+    //function version() external pure returns (string memory);
 
     function underlying() external view returns (address);
 
