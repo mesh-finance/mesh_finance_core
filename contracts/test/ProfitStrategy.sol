@@ -115,7 +115,7 @@ contract ProfitStrategy is IStrategy {
         //Available LP Tokens
         uint rUSD_USDC_LPTokenBalance = IUniswapV2Pair(rUSD_USDC_LPToken).balanceOf(address(this))
 
-        IStakin
+        IStakingRewards(quickswapReward_rUSD_USDC_Pool).stake(rUSD_USDC_LPToken);
 
         ERC20PresetMinterPauser(underlying).mint(
             address(this),
