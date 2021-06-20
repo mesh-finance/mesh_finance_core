@@ -49,6 +49,10 @@ contract ProfitStrategy is IStrategy {
     address constant rUSD_USDC_LPToken = 0x5ef8747d1dc4839e92283794a10d448357973ac0;
     SimplePriceOracle QUICK_USDC_priceOracle;
     SimplePriceOracle rUSD_USDC_priceOracle;
+
+    uint USDC_liquidityAdded = 0;
+    uint rUSD_liquidityAdded = 0;
+
     constructor(address _fund, uint256 _profitPerc) public {
         require(_fund != address(0), "Fund cannot be empty");
         // We assume that this contract is a minter on underlying
@@ -103,17 +107,22 @@ contract ProfitStrategy is IStrategy {
         uint underlyingBalance = IERC20(underlying).balanceOf(address(this));
         
         uint minAmountToInvest = underlyingBalance.mul(90).div(100);
-        uint amountToRUSD = minAmountToInvest.div(2)
-        //TODO: Consult Oracle for onChainSwap
+        uint amountToRUSD = minAmountToInvest.div(2);
+
         uint minOutputAmount = rUSD_USDC_priceOracle.consult(USDC, amountToRUSD);
 
         // Swap
-        IUniswapV2Router02(_quickswapRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(amountToRUSD, minOutputAmount, [USDC, rUSD], address(this), 20 minutes)
-        uint rUSDBalance = IERC20(rUSD).balanceOf(address(this))
-        IUniswapV2Router02(_quickswapRouter).addLiquidity(USDC, rUSD, amountToRUSD, rUSDBalance, amountToRUSD.mul(95).div(100), rUSDBalance.mul(95).div(100), address(this), 20 minutes)
+        IUniswapV2Router02(_quickswapRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(amountToRUSD, minOutputAmount, [USDC, rUSD], address(this), 20 minutes);
+
+        uint rUSDBalance = IERC20(rUSD).balanceOf(address(this));
+        IUniswapV2Router02(_quickswapRouter).addLiquidity(USDC, rUSD, amountToRUSD, rUSDBalance, amountToRUSD.mul(95).div(100), rUSDBalance.mul(95).div(100), address(this), 20 minutes);
+
+        //Calculate how much liquidity has actually been added
+        USDC_liquidityAdded = underlyingBalance - IERC20(USDC).balanceOf(address(this));
+        rUSD_liquidityAdded = rUSDBalance - IERC20(rUSD).balanceOf(address(this));
 
         //Available LP Tokens
-        uint rUSD_USDC_LPTokenBalance = IUniswapV2Pair(rUSD_USDC_LPToken).balanceOf(address(this))
+        uint rUSD_USDC_LPTokenBalance = IUniswapV2Pair(rUSD_USDC_LPToken).balanceOf(address(this));
 
         IStakingRewards(quickswapReward_rUSD_USDC_Pool).stake(rUSD_USDC_LPToken);
 
@@ -128,6 +137,40 @@ contract ProfitStrategy is IStrategy {
      * Cashes everything out and withdraws to the fund
      */
     function withdrawAllToFund() external override onlyFundOrGovernance {
+        
+        // Withdraw LP Tokens and claim QUICK
+        IStakingRewards(quickswapReward_rUSD_USDC_Pool).exit();
+
+        // Sell farmed QUICK rewards
+        uint quickTokenBalance = IERC20(QUICK).balanceOf(address(this));
+
+        uint minOutputAmount = QUICK_USDC_priceOracle.consult(QUICK, quickTokenBalance);
+
+        IUniswapV2Router02(_quickswapRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(quickTokenBalance, minOutputAmount, [QUICK, USDC], address(this), 20 minutes);
+
+        // Exit liquidity pool for rUSD and USDC
+
+        //Available LP Tokens
+        uint rUSD_USDC_LPTokenBalance = IUniswapV2Pair(rUSD_USDC_LPToken).balanceOf(address(this));
+        uint rUSDBalance = IERC20(rUSD).balanceOf(address(this));
+        uint USDCBalance = IERC20(USDC).balanceOf(address(this));
+
+        IUniswapV2Router02(_quickswapRouter).removeLiquidity(USDC, rUSD, rUSD_USDC_LPTokenBalance, USDC_liquidityAdded.mul(97).div(100), rUSD_liquidityAdded.mul(97).div(100), address(this), 20 minutes);
+        
+        //Update liquidity added variables        
+        USDC_liquidityAdded = USDC_liquidityAdded.sub(IERC20(USDC).balanceOf(address(this)).sub(USDCBalance));
+        rUSD_liquidityAdded = rUSD_liquidityAdded/sub(IERC20(rUSD).balanceOf(address(this)).sub(rUSDBalance));
+
+        // Sell rUSD for USDC
+
+        rUSDBalance = IERC20(rUSD).balanceOf(address(this));
+        uint minOutputAmount = rUSD_USDC_priceOracle.consult(rUSD, rUSDBalance);
+
+        // Swap
+        IUniswapV2Router02(_quickswapRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(rUSDC, minOutputAmount, [rUSD, USDC], address(this), 20 minutes);
+
+        
+        
         IERC20(underlying).safeTransfer(
             fund,
             IERC20(underlying).balanceOf(address(this))
@@ -154,7 +197,7 @@ contract ProfitStrategy is IStrategy {
      */
     // solhint-disable-next-line no-empty-blocks
     function doHardWork() external override onlyFundOrGovernance {
-        // investAllUnderlying();   // call this externally for testing as profit geeneration should be after invesment
+        investAllUnderlying();   // call this externally for testing as profit geeneration should be after invesment
     }
 
     // no tokens apart from underlying should be sent to this contract. Any tokens that are sent here by mistake are recoverable by governance
