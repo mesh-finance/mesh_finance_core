@@ -8,14 +8,13 @@ import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/math/Math.sol";
 import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/math/SafeMath.sol";
 import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/token/ERC20/SafeERC20.sol";
 import "../../../interfaces/IStrategy.sol";
-import "../../../interfaces/IFund.sol";
 import "../../../interfaces/IGovernable.sol";
 import "../../../interfaces/uniswap/IUniswapV2Router02";
 import "../../../interfaces/uniswap/IUniswapV2Pair";
 import "../../../interfaces/uniswap/IStakingRewards";
-
 import "../../oracles/SimplePriceOracle";
-contract ProfitStrategy is IStrategy {
+
+contract QuickswapStrategy is IStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
@@ -27,17 +26,15 @@ contract ProfitStrategy is IStrategy {
 
     uint256 internal constant MAX_BPS = 10000; // 100% in basis points
 
-    address public override underlying;
     address public override fund;
     address public override creator;
 
     uint256 internal accountedBalance;
-    uint256 internal profitPerc;
 
     // These tokens cannot be claimed by the controller
     mapping(address => bool) public unsalvagableTokens;
 
-    // Quickswap (Uniswap V2 fork) router to liquidate MATIC rewards to underlying
+    // Quickswap (Uniswap V2 fork) router to liquidate MATIC rewards to USDC
     address internal constant _quickswapRouter =
         address(0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff);
 
@@ -53,14 +50,11 @@ contract ProfitStrategy is IStrategy {
     uint USDC_liquidityAdded = 0;
     uint rUSD_liquidityAdded = 0;
 
-    constructor(address _fund, uint256 _profitPerc) public {
+    constructor(address _fund) public {
         require(_fund != address(0), "Fund cannot be empty");
-        // We assume that this contract is a minter on underlying
-        fund = _fund;
-        underlying = IFund(fund).underlying();
-        profitPerc = _profitPerc;
-        creator = msg.sender;
 
+        fund = _fund;
+        creator = msg.sender;
         QUICK_USDC_priceOracle = SimplePriceOracle(quickswapFactory, QUICK, USDC);
         rUSD_USDC_priceOracle = SimplePriceOracle(quickswapFactory, rUSD, USDC);
         _updateOracles();
@@ -93,19 +87,18 @@ contract ProfitStrategy is IStrategy {
     {
         _updateOracles();
         uint rUSD_invested = rUSD_USDC_priceOracle.consult(rUSD, rUSD_liquidityAdded);
-        return IERC20(underlying).balanceOf(address(this)).add(USDC_liquidityAdded).add(rUSD_invested);
+        return IERC20(USDC).balanceOf(address(this)).add(USDC_liquidityAdded).add(rUSD_invested);
     }
 
     /*
      * Invests all tokens that were accumulated so far
      */
     function investAllUnderlying() public {
-        // uint256 contribution =
-        //     IERC20(underlying).balanceOf(address(this)).sub(accountedBalance);
 
-        uint underlyingBalance = IERC20(underlying).balanceOf(address(this));
+        //We know that underlying is USDC in this case so we are
+        uint USDCBalance = IERC20(USDC).balanceOf(address(this));
         
-        uint minAmountToInvest = underlyingBalance.mul(90).div(100);
+        uint minAmountToInvest = USDCBalance.mul(90).div(100);
         uint amountToRUSD = minAmountToInvest.div(2);
 
         //Swap USDC for rUSD
@@ -116,18 +109,14 @@ contract ProfitStrategy is IStrategy {
         IUniswapV2Router02(_quickswapRouter).addLiquidity(USDC, rUSD, amountToRUSD, rUSDBalance, amountToRUSD.mul(95).div(100), rUSDBalance.mul(95).div(100), address(this), 20 minutes);
 
         //Calculate how much liquidity has actually been added
-        USDC_liquidityAdded = underlyingBalance - IERC20(USDC).balanceOf(address(this));
+        USDC_liquidityAdded = USDCBalance - IERC20(USDC).balanceOf(address(this));
         rUSD_liquidityAdded = rUSDBalance - IERC20(rUSD).balanceOf(address(this));
 
         //Stake available LP Tokens
         uint rUSD_USDC_LPTokenBalance = IUniswapV2Pair(rUSD_USDC_LPToken).balanceOf(address(this));
         IStakingRewards(quickswapReward_rUSD_USDC_Pool).stake(rUSD_USDC_LPToken);
 
-        ERC20PresetMinterPauser(underlying).mint(
-            address(this),
-            contribution.mul(profitPerc).div(MAX_BPS)
-        );
-        accountedBalance = IERC20(underlying).balanceOf(address(this));
+        accountedBalance = IERC20(USDC).balanceOf(address(this));
     }
 
     /*
@@ -142,11 +131,11 @@ contract ProfitStrategy is IStrategy {
         _withdrawLiquidtyToUSDC();
         
         
-        IERC20(underlying).safeTransfer(
+        IERC20(USDC).safeTransfer(
             fund,
-            IERC20(underlying).balanceOf(address(this))
+            IERC20(USDC).balanceOf(address(this))
         );
-        accountedBalance = IERC20(underlying).balanceOf(address(this));
+        accountedBalance = IERC20(USDC).balanceOf(address(this));
     }
 
     /*
@@ -157,26 +146,26 @@ contract ProfitStrategy is IStrategy {
         override
         onlyFundOrGovernance
     {
-        uint256 underlyingBalance = IERC20(underlying).balanceOf(address(this));
-        if(underlyingBalance > amount){
-            IERC20(underlying).safeTransfer(fund, amountTowithdraw);
+        uint256 USDCBalance = IERC20(USDC).balanceOf(address(this));
+        if(USDCBalance > amount){
+            IERC20(USDC).safeTransfer(fund, amountTowithdraw);
         } else {
             // Calculate amount of QUICK earned
             uint QUICK_earned = IStakingRewards(quickswapReward_rUSD_USDC_Pool).earned(address(this));
             uint USDC_valueOf_QUICK_earned = QUICK_USDC_priceOracle.consult(QUICK, QUICK_earned);
 
-            if(underlyingBalance + USDC_valueOf_QUICK_earned < amount){
+            if(USDCBalance + USDC_valueOf_QUICK_earned < amount){
                 _withdrawLiquidtyToUSDC();
             }
             // Claim QUICK and sell for USDC
             _claimQUICKRewardsToUSDC();
         }
-        IERC20(underlying).safeTransfer(
+        IERC20(USDC).safeTransfer(
             fund,
             amount
         );
 
-        accountedBalance = IERC20(underlying).balanceOf(address(this));
+        accountedBalance = IERC20(USDC).balanceOf(address(this));
         
         // Reinvest remaining tokens
         if(accountedBalance > 0){
@@ -234,10 +223,10 @@ contract ProfitStrategy is IStrategy {
         QUICK_USDC_priceOracle.update();
     }
 
-    // no tokens apart from underlying should be sent to this contract. Any tokens that are sent here by mistake are recoverable by governance
+    // no tokens apart from USDC should be sent to this contract. Any tokens that are sent here by mistake are recoverable by governance
     function sweep(address _token, address _sweepTo) external {
         require(governance() == msg.sender, "Not governance");
-        require(_token != underlying, "can not sweep underlying");
+        require(_token != USDC, "can not sweep USDC");
         IERC20(_token).safeTransfer(
             _sweepTo,
             IERC20(_token).balanceOf(address(this))
