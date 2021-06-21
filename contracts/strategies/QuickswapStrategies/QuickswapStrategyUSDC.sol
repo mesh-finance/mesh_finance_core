@@ -9,10 +9,10 @@ import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/math/SafeMath.sol";
 import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/token/ERC20/SafeERC20.sol";
 import "../../../interfaces/IStrategy.sol";
 import "../../../interfaces/IGovernable.sol";
-import "../../../interfaces/uniswap/IUniswapV2Router02";
-import "../../../interfaces/uniswap/IUniswapV2Pair";
-import "../../../interfaces/uniswap/IStakingRewards";
-import "../../oracles/SimplePriceOracle";
+import "../../../interfaces/uniswap/IUniswapV2Router02.sol";
+import "../../../interfaces/uniswap/IUniswapV2Pair.sol";
+import "../../../interfaces/uniswap/IStakingRewards.sol";
+import "../../oracles/SimplePriceOracle.sol";
 
 contract QuickswapStrategy is IStrategy {
     using SafeERC20 for IERC20;
