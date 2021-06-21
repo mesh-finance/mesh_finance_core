@@ -98,6 +98,8 @@ contract QuickswapStrategy is IStrategy {
         //We know that underlying is USDC in this case so we are
         uint USDCBalance = IERC20(USDC).balanceOf(address(this));
         
+        require(USDCBalance > 0, "No funds available to invest");
+
         uint minAmountToInvest = USDCBalance.mul(90).div(100);
         uint amountToRUSD = minAmountToInvest.div(2);
 
@@ -114,7 +116,7 @@ contract QuickswapStrategy is IStrategy {
 
         //Stake available LP Tokens
         uint rUSD_USDC_LPTokenBalance = IUniswapV2Pair(rUSD_USDC_LPToken).balanceOf(address(this));
-        IStakingRewards(quickswapReward_rUSD_USDC_Pool).stake(rUSD_USDC_LPToken);
+        IStakingRewards(quickswapReward_rUSD_USDC_Pool).stake(rUSD_USDC_LPTokenBalance);
 
         accountedBalance = IERC20(USDC).balanceOf(address(this));
     }
@@ -194,7 +196,9 @@ contract QuickswapStrategy is IStrategy {
         
         //Available LP Tokens
         uint rUSD_USDC_LPTokenBalance = IUniswapV2Pair(rUSD_USDC_LPToken).balanceOf(address(this));
-        uint rUSDBalance = IERC20(rUSD).balanceOf(address(this));
+        
+        // Taking this into account because we want to keep track of liquidity provision
+        uint rUSDBalance = IERC20(rUSD).balanceOf(address(this)); //Should be 0 technically
         uint USDCBalance = IERC20(USDC).balanceOf(address(this));
 
         IUniswapV2Router02(_quickswapRouter).removeLiquidity(USDC, rUSD, rUSD_USDC_LPTokenBalance, USDC_liquidityAdded.mul(97).div(100), rUSD_liquidityAdded.mul(97).div(100), address(this), 20 minutes);
