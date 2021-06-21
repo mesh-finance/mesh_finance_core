@@ -34,7 +34,7 @@ contract SimplePriceOracle {
         uint112 reserve0;
         uint112 reserve1;
         (reserve0, reserve1, blockTimestampLast) = _pair.getReserves();
-        require(reserve0 != 0 && reserve1 != 0, 'ExampleOracleSimple: NO_RESERVES'); // ensure that there's liquidity in the pair
+        require(reserve0 != 0 && reserve1 != 0, 'SimplePriceOracle: NO_RESERVES'); // ensure that there's liquidity in the pair
     }
 
     function update() external {
@@ -43,7 +43,7 @@ contract SimplePriceOracle {
         uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
 
         // ensure that at least one full period has passed since the last update
-        require(timeElapsed >= PERIOD, 'ExampleOracleSimple: PERIOD_NOT_ELAPSED');
+        require(timeElapsed >= PERIOD, 'SimplePriceOracle: PERIOD_NOT_ELAPSED');
 
         // overflow is desired, casting never truncates
         // cumulative price is in (uq112x112 price * seconds) units so we simply wrap it after division by time elapsed
@@ -60,7 +60,7 @@ contract SimplePriceOracle {
         if (token == token0) {
             amountOut = price0Average.mul(amountIn).decode144();
         } else {
-            require(token == token1, 'ExampleOracleSimple: INVALID_TOKEN');
+            require(token == token1, 'SimplePriceOracle: INVALID_TOKEN');
             amountOut = price1Average.mul(amountIn).decode144();
         }
     }

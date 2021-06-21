@@ -161,8 +161,8 @@ contract QuickswapStrategy is IStrategy {
             uint QUICK_earned = IStakingRewards(quickswapReward_rUSD_USDC_Pool).earned(address(this));
             uint USDC_valueOf_QUICK_earned = QUICK_USDC_priceOracle.consult(QUICK, QUICK_earned);
 
+            // If this is not enough, we exit our positions
             if(USDCBalance + USDC_valueOf_QUICK_earned < amount){
-                // If this is not enough, we exit our positions
                 _withdrawLiquidtyToUSDC();
             }
             // Claim QUICK and sell for USDC
