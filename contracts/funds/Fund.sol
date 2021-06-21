@@ -672,12 +672,24 @@ contract Fund is
         emit Withdraw(msg.sender, underlyingAmountToWithdraw, withdrawalFee);
     }
 
-    function shouldUpgrade() external view override returns (bool, address) {
-        return (true, address(this));
+    /**
+     * Schedules an upgrade for this fund's proxy.
+     */
+    function scheduleUpgrade(address newImplementation)
+        external
+        onlyGovernance
+    {
+        // Timelock implementation can be done here later
+        _setNextImplementation(newImplementation);
     }
 
-    // solhint-disable-next-line no-empty-blocks
-    function finalizeUpgrade() external override onlyGovernance {}
+    function shouldUpgrade() external view override returns (bool, address) {
+        return (_nextImplementation() != address(0), _nextImplementation());
+    }
+
+    function finalizeUpgrade() external override onlyGovernance {
+        _setNextImplementation(address(0));
+    }
 
     function setFundManager(address newFundManager)
         external

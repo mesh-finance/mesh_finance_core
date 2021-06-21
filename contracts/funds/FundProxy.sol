@@ -22,9 +22,13 @@ contract FundProxy is UpgradeableProxy {
     function upgrade(address newImplementation) external {
         // oldImplementation is unused for now
         // solhint-disable-next-line no-unused-vars
-        (bool should, address oldImplementation) =
+        (bool should, address nextImplementation) =
             IUpgradeSource(address(this)).shouldUpgrade();
         require(should, "Upgrade not scheduled");
+        require(
+            nextImplementation == newImplementation,
+            "NewImplementation is not same"
+        );
         _upgradeTo(newImplementation);
 
         // the finalization needs to be executed on itself to update the storage of this proxy

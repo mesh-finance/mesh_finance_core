@@ -43,6 +43,8 @@ contract FundStorage is Initializable, SetGetAssembly {
         0x7f8e3dfb98485aa419c1d05b6ea089a8cddbafcfcf4491db33f5d0b5fe4f32c7;
     bytes32 internal constant _LAST_HARDWORK_TIMESTAMP_SLOT =
         0x0260c2bf5555cd32cedf39c0fcb0eab8029c67b3d5137faeb3e24a500db80bc9;
+    bytes32 internal constant _NEXT_IMPLEMENTATION_SLOT =
+        0xa7ae0fa763ec3009113ccc5eb9089e1f0028607f5b8198c52cd42366c1ddb17b;
 
     constructor() public {
         assert(
@@ -229,6 +231,16 @@ contract FundStorage is Initializable, SetGetAssembly {
                     ) - 1
                 )
         );
+        assert(
+            _NEXT_IMPLEMENTATION_SLOT ==
+                bytes32(
+                    uint256(
+                        keccak256(
+                            "eip1967.mesh.finance.fundStorage.nextImplementation"
+                        )
+                    ) - 1
+                )
+        );
     }
 
     function initializeFundStorage(
@@ -258,6 +270,7 @@ contract FundStorage is Initializable, SetGetAssembly {
         _setDepositsPaused(false);
         _setShouldRebalance(false);
         _setLastHardworkTimestamp(0);
+        _setNextImplementation(address(0));
     }
 
     function _setUnderlying(address _address) internal {
@@ -410,6 +423,14 @@ contract FundStorage is Initializable, SetGetAssembly {
 
     function _lastHardworkTimestamp() internal view returns (uint256) {
         return getUint256(_LAST_HARDWORK_TIMESTAMP_SLOT);
+    }
+
+    function _setNextImplementation(address _newImplementation) internal {
+        setAddress(_NEXT_IMPLEMENTATION_SLOT, _newImplementation);
+    }
+
+    function _nextImplementation() internal view returns (address) {
+        return getAddress(_NEXT_IMPLEMENTATION_SLOT);
     }
 
     uint256[50] private bigEmptySlot;
