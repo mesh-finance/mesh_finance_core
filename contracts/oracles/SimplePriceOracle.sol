@@ -1,16 +1,16 @@
 pragma solidity =0.6.12;
 
-import '@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol';
-import '@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol';
-import '@uniswap/lib/contracts/libraries/FixedPoint.sol';
+import 'Uniswap/uniswap-v2-core@1.0.0/contracts/interfaces/IUniswapV2Factory.sol';
+import 'Uniswap/uniswap-v2-core@1.0.0/contracts/interfaces/IUniswapV2Pair.sol';
+import 'Uniswap/uniswap-v2-core@1.0.0/contracts/libraries/UQ112x112.sol';
 
-import '../../libraries/uniswap/UniswapV2OracleLibrary.sol';
-import '../../libraries/uniswap/UniswapV2Library.sol';
+import 'Uniswap/uniswap-v2-periphery@1.0.0-beta.0/contracts/libraries/UniswapV2OracleLibrary.sol';
+import 'Uniswap/uniswap-v2-periphery@1.0.0-beta.0/contracts/libraries/UniswapV2Library.sol';
 
 // fixed window oracle that recomputes the average price for the entire period once every period
 // note that the price average is only guaranteed to be over at least 1 period, but may be over a longer period
 contract SimplePriceOracle {
-    using FixedPoint for *;
+    // using FixedPoint for *;
 
     uint public constant PERIOD = 24 hours;
 
@@ -21,8 +21,8 @@ contract SimplePriceOracle {
     uint    public price0CumulativeLast;
     uint    public price1CumulativeLast;
     uint32  public blockTimestampLast;
-    FixedPoint.uq112x112 public price0Average;
-    FixedPoint.uq112x112 public price1Average;
+    UQ112x112 public price0Average;
+    UQ112x112 public price1Average;
 
     constructor(address factory, address tokenA, address tokenB) public {
         IUniswapV2Pair _pair = IUniswapV2Pair(UniswapV2Library.pairFor(factory, tokenA, tokenB));
@@ -47,8 +47,8 @@ contract SimplePriceOracle {
 
         // overflow is desired, casting never truncates
         // cumulative price is in (uq112x112 price * seconds) units so we simply wrap it after division by time elapsed
-        price0Average = FixedPoint.uq112x112(uint224((price0Cumulative - price0CumulativeLast) / timeElapsed));
-        price1Average = FixedPoint.uq112x112(uint224((price1Cumulative - price1CumulativeLast) / timeElapsed));
+        price0Average = UQ112x112(uint224((price0Cumulative - price0CumulativeLast) / timeElapsed));
+        price1Average = UQ112x112(uint224((price1Cumulative - price1CumulativeLast) / timeElapsed));
 
         price0CumulativeLast = price0Cumulative;
         price1CumulativeLast = price1Cumulative;
