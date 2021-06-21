@@ -100,6 +100,7 @@ contract QuickswapStrategy is IStrategy {
         
         require(USDCBalance > 0, "No funds available to invest");
 
+        //Invest 90% of input capital
         uint minAmountToInvest = USDCBalance.mul(90).div(100);
         uint amountToRUSD = minAmountToInvest.div(2);
 
@@ -108,6 +109,7 @@ contract QuickswapStrategy is IStrategy {
 
         //Add liquidity for USDC/rUSD pool
         uint rUSDBalance = IERC20(rUSD).balanceOf(address(this));
+        _grantApproval(rUSD, _quickswapRouter, rUSDBalance);
         IUniswapV2Router02(_quickswapRouter).addLiquidity(USDC, rUSD, amountToRUSD, rUSDBalance, amountToRUSD.mul(95).div(100), rUSDBalance.mul(95).div(100), address(this), 20 minutes);
 
         //Calculate how much liquidity has actually been added
@@ -116,6 +118,7 @@ contract QuickswapStrategy is IStrategy {
 
         //Stake available LP Tokens
         uint rUSD_USDC_LPTokenBalance = IUniswapV2Pair(rUSD_USDC_LPToken).balanceOf(address(this));
+        _grantApproval(rUSD_USDC_LPToken, quickswapReward_rUSD_USDC_Pool, rUSD_USDC_LPTokenBalance);
         IStakingRewards(quickswapReward_rUSD_USDC_Pool).stake(rUSD_USDC_LPTokenBalance);
 
         accountedBalance = IERC20(USDC).balanceOf(address(this));
@@ -148,6 +151,8 @@ contract QuickswapStrategy is IStrategy {
         override
         onlyFundOrGovernance
     {
+        require(amount < investedUnderlyingBalance(), "Amount higher than initial capital requested");
+
         uint256 USDCBalance = IERC20(USDC).balanceOf(address(this));
         if(USDCBalance > amount){
             IERC20(USDC).safeTransfer(fund, amountTowithdraw);
@@ -157,11 +162,14 @@ contract QuickswapStrategy is IStrategy {
             uint USDC_valueOf_QUICK_earned = QUICK_USDC_priceOracle.consult(QUICK, QUICK_earned);
 
             if(USDCBalance + USDC_valueOf_QUICK_earned < amount){
+                // If this is not enough, we exit our positions
                 _withdrawLiquidtyToUSDC();
             }
             // Claim QUICK and sell for USDC
             _claimQUICKRewardsToUSDC();
         }
+
+
         IERC20(USDC).safeTransfer(
             fund,
             amount
@@ -184,13 +192,13 @@ contract QuickswapStrategy is IStrategy {
         investAllUnderlying();   // call this externally for testing as profit generation should be after invesment
     }
 
-    function _claimQUICKRewardsToUSDC(){
+    function _claimQUICKRewardsToUSDC() internal {
         IStakingRewards(quickswapReward_rUSD_USDC_Pool).getReward();
         uint QUICK_balance = IERC20(QUICK).balanceOf(address(this));
         _swapToken(QUICK, USDC, QUICK_balance, QUICK_USDC_priceOracle);        
     }
 
-    function _withdrawLiquidtyToUSDC(){
+    function _withdrawLiquidtyToUSDC()internal {
 
         IStakingRewards(quickswapReward_rUSD_USDC_Pool).exit();
         
@@ -213,6 +221,7 @@ contract QuickswapStrategy is IStrategy {
     }
     function _swapToken(address inputToken, address outputToken, uint inputAmount, SimplePriceOracle priceOracle) internal {
         require(IERC20(inputToken).balanceOf(address) >= inputAmount, "Insufficient balance for swap");
+        _grantApproval(inputToken, _quickswapRouter, inputAmount);
         //Update Oracles
         _updateOracles();
         //Calculate minOutputAmount 
@@ -221,12 +230,17 @@ contract QuickswapStrategy is IStrategy {
         IUniswapV2Router02(_quickswapRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(inputAmount, minOutputAmount, [inputToken, outputToken], address(this), 20 minutes);
 
     }
-
+    // Keeping this public because anyone is more than welcome to execute this for us (Oracle Maintainance)
     function _updateOracles() public {
         rUSD_USDC_priceOracle.update();
         QUICK_USDC_priceOracle.update();
     }
 
+    function _grantApproval(address token, address receiver,uint tokenAmount) internal {
+        if(IERC20(token).allowance(address(this),reciever) < tokenAmount){
+            IERC20(token).approve(reciever, tokenAmount.sub(IERC20(token).allowance(address(this), reciever)));
+        }
+    }
     // no tokens apart from USDC should be sent to this contract. Any tokens that are sent here by mistake are recoverable by governance
     function sweep(address _token, address _sweepTo) external {
         require(governance() == msg.sender, "Not governance");
