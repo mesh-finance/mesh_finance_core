@@ -38,12 +38,12 @@ contract QuickswapStrategy is IStrategy {
     address internal constant _quickswapRouter =
         address(0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff);
 
-    address constant rUSD = 0xfc40a4f89b410a1b855b5e205064a38fc29f5eb5;
-    address constant USDC = 0x2791bca1f2de4661ed88a30c99a7a9449aa84174;
-    address constant QUICK = 0x831753dd7087cac61ab5644b308642cc1c33dc13;
-    address constant quickswapReward_rUSD_USDC_Pool = 0x5C1186F784A4fEFd53Dc40c492b02dEEd97E7944;
-    address constant quickswapFactory = 0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32;
-    address constant rUSD_USDC_LPToken = 0x5ef8747d1dc4839e92283794a10d448357973ac0;
+    address internal constant rUSD = address(0xfC40a4F89b410a1b855b5e205064a38fC29F5eb5);
+    address internal constant USDC = address(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
+    address internal constant QUICK = address(0x831753DD7087CaC61aB5644b308642cc1c33Dc13);
+    address internal constant quickswapReward_rUSD_USDC_Pool = address(0x5C1186F784A4fEFd53Dc40c492b02dEEd97E7944);
+    address internal constant quickswapFactory = address(0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32);
+    address internal constant rUSD_USDC_LPToken = address(0x5EF8747d1dc4839e92283794a10d448357973aC0);
     SimplePriceOracle QUICK_USDC_priceOracle;
     SimplePriceOracle rUSD_USDC_priceOracle;
 
@@ -55,12 +55,12 @@ contract QuickswapStrategy is IStrategy {
 
         fund = _fund;
         creator = msg.sender;
-        QUICK_USDC_priceOracle = SimplePriceOracle(quickswapFactory, QUICK, USDC);
-        rUSD_USDC_priceOracle = SimplePriceOracle(quickswapFactory, rUSD, USDC);
+        QUICK_USDC_priceOracle = new SimplePriceOracle(quickswapFactory, QUICK, USDC);
+        rUSD_USDC_priceOracle = new SimplePriceOracle(quickswapFactory, rUSD, USDC);
         _updateOracles();
     }
 
-    function governance() internal returns (address) {
+    function governance() internal view returns (address) {
         return IGovernable(fund).governance();
     }
 
@@ -75,7 +75,9 @@ contract QuickswapStrategy is IStrategy {
         );
         _;
     }
-
+     function underlying() external view override returns (address) {
+         return USDC;
+     }
     /*
      * Returns the total invested amount.
      */
@@ -85,7 +87,6 @@ contract QuickswapStrategy is IStrategy {
         override
         returns (uint256)
     {
-        _updateOracles();
         uint rUSD_invested = rUSD_USDC_priceOracle.consult(rUSD, rUSD_liquidityAdded);
         return IERC20(USDC).balanceOf(address(this)).add(USDC_liquidityAdded).add(rUSD_invested);
     }
@@ -155,7 +156,7 @@ contract QuickswapStrategy is IStrategy {
 
         uint256 USDCBalance = IERC20(USDC).balanceOf(address(this));
         if(USDCBalance > amount){
-            IERC20(USDC).safeTransfer(fund, amountTowithdraw);
+            IERC20(USDC).safeTransfer(fund, amount);
         } else {
             // Calculate amount of QUICK earned
             uint QUICK_earned = IStakingRewards(quickswapReward_rUSD_USDC_Pool).earned(address(this));
@@ -220,14 +221,17 @@ contract QuickswapStrategy is IStrategy {
 
     }
     function _swapToken(address inputToken, address outputToken, uint inputAmount, SimplePriceOracle priceOracle) internal {
-        require(IERC20(inputToken).balanceOf(address) >= inputAmount, "Insufficient balance for swap");
+        require(IERC20(inputToken).balanceOf(address(this)) >= inputAmount, "Insufficient balance for swap");
         _grantApproval(inputToken, _quickswapRouter, inputAmount);
         //Update Oracles
         _updateOracles();
         //Calculate minOutputAmount 
         uint minOutputAmount = priceOracle.consult(inputToken, inputAmount);
         //Execute swap
-        IUniswapV2Router02(_quickswapRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(inputAmount, minOutputAmount, [inputToken, outputToken], address(this), 20 minutes);
+        address[] memory path = new address[](2);
+        path[0] = inputToken;
+        path[1] = outputToken;
+        IUniswapV2Router02(_quickswapRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(inputAmount, minOutputAmount, path, address(this), 20 minutes);
 
     }
     // Keeping this public because anyone is more than welcome to execute this for us (Oracle Maintainance)
@@ -237,8 +241,8 @@ contract QuickswapStrategy is IStrategy {
     }
 
     function _grantApproval(address token, address receiver,uint tokenAmount) internal {
-        if(IERC20(token).allowance(address(this),reciever) < tokenAmount){
-            IERC20(token).approve(reciever, tokenAmount.sub(IERC20(token).allowance(address(this), reciever)));
+        if(IERC20(token).allowance(address(this),receiver) < tokenAmount){
+            IERC20(token).approve(receiver, tokenAmount.sub(IERC20(token).allowance(address(this), receiver)));
         }
     }
     // no tokens apart from USDC should be sent to this contract. Any tokens that are sent here by mistake are recoverable by governance
