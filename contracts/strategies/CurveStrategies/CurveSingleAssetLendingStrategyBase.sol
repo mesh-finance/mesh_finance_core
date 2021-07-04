@@ -137,7 +137,7 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
         // restricted tokens, can not be swept
         canNotSweep[_underlying] = true;
         canNotSweep[_crvPoolToken] = true;
-        canNotSweep[_crvPoolToken] = true;
+        canNotSweep[_crvPoolGauge] = true;
         canNotSweep[_CRVToken] = true;
         canNotSweep[_rewardToken] = true;
 

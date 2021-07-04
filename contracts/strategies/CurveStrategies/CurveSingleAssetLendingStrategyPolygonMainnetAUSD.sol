@@ -23,7 +23,7 @@ contract CurveSingleAssetLendingStrategyPolygonMainnetAUSD is
 
     // Gauge for rewards
     address internal constant _crvPoolGauge =
-        address(0xe381C25de995d62b453aF8B931aAc84fcCaa7A62);
+        address(0x19793B454D3AfC7b454F206Ffe95aDE26cA6912c);
 
     // Gauge type. Rewards: {1: Only CRV, 2: CRV + Reward, 3: Only Reward}
     uint8 internal constant _crvPoolGaugeType = 3;
