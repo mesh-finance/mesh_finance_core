@@ -6,7 +6,7 @@ import "./Fund.sol";
 import "../utils/Governable.sol";
 
 contract FundFactory is Governable {
-    event NewFund(address fundProxy);
+    event NewFund(address indexed fundProxy);
 
     constructor() public {
         Governable.initializeGovernance(msg.sender);
@@ -18,6 +18,7 @@ contract FundFactory is Governable {
         string memory _name,
         string memory _symbol
     ) public onlyGovernance returns (address) {
+        require(_implementation != address(0), "fund cannot be empty");
         FundProxy proxy = new FundProxy(_implementation);
         Fund(address(proxy)).initializeFund(
             msg.sender,

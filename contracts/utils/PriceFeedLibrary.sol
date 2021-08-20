@@ -20,6 +20,7 @@ library PriceFeedLibrary {
             uint256 timeStamp,
             uint80 answeredInRound
         ) = AggregatorV3Interface(priceFeed).latestRoundData();
+        require(answeredInRound >= roundID, "Stale data from price feed");
         return price;
     }
     /* solhint-enable no-unused-vars */

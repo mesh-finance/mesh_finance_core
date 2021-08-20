@@ -29,11 +29,11 @@ contract Fund is
     using SafeMathUpgradeable for uint256;
     using SafeMathUpgradeable for uint8;
 
-    event Withdraw(address indexed beneficiary, uint256 amount, uint256 fee);
+    event Withdraw(address indexed beneficiary, uint256 amount);
     event Deposit(address indexed beneficiary, uint256 amount);
-    event InvestInStrategy(address strategy, uint256 amount);
+    event InvestInStrategy(address indexed strategy, uint256 amount);
     event StrategyRewards(
-        address strategy,
+        address indexed strategy,
         uint256 profit,
         uint256 strategyCreatorFee
     );
@@ -46,16 +46,19 @@ contract Fund is
     event HardWorkDone(uint256 totalValueLocked, uint256 pricePerShare);
 
     event StrategyAdded(
-        address strategy,
+        address indexed strategy,
         uint256 weightage,
         uint256 performanceFeeStrategy
     );
-    event StrategyWeightageUpdated(address strategy, uint256 newWeightage);
+    event StrategyWeightageUpdated(
+        address indexed strategy,
+        uint256 newWeightage
+    );
     event StrategyPerformanceFeeUpdated(
-        address strategy,
+        address indexed strategy,
         uint256 newPerformanceFeeStrategy
     );
-    event StrategyRemoved(address strategy);
+    event StrategyRemoved(address indexed strategy);
 
     address internal constant ZERO_ADDRESS = address(0);
 
@@ -65,7 +68,8 @@ contract Fund is
     uint256 internal constant MAX_PLATFORM_FEE = 500; // 5% (annual on AUM), goes to governance/treasury
     uint256 internal constant MAX_PERFORMANCE_FEE_FUND = 1000; // 10% on profits, goes to fund manager
     uint256 internal constant MAX_PERFORMANCE_FEE_STRATEGY = 1000; // 10% on profits, goes to strategy creator
-    uint256 internal constant MAX_WITHDRAWAL_FEE = 100; // 1%, goes to governance/treasury
+
+    uint256 internal constant MAX_ACTIVE_STRATEGIES = 10; // To save on potential out of gas issues
 
     struct StrategyParams {
         uint256 weightage; // weightage of total assets in fund this strategy can access (in BPS) (5000 for 50%)
@@ -87,6 +91,8 @@ contract Fund is
         string memory _name,
         string memory _symbol
     ) public initializer {
+        require(_governance != ZERO_ADDRESS, "governance must be defined");
+        require(_underlying != ZERO_ADDRESS, "underlying must be defined");
         ERC20Upgradeable.__ERC20_init(_name, _symbol);
 
         __ReentrancyGuard_init();
@@ -97,30 +103,36 @@ contract Fund is
 
         uint256 _underlyingUnit = 10**uint256(_decimals);
 
+        uint256 _changeDelay = 12 hours;
+
         FundStorage.initializeFundStorage(
             _underlying,
             _underlyingUnit,
             _decimals,
             _governance, // fund manager is initialized as governance
             _governance, // relayer is initialized as governance
-            _governance // rewards contract is initialized as governance
+            _governance, // rewards contract is initialized as governance
+            _changeDelay
         );
+    }
+
+    modifier onlyFundManager {
+        require(_fundManager() == msg.sender, "Not fund manager");
+        _;
     }
 
     modifier onlyFundManagerOrGovernance() {
         require(
             (_governance() == msg.sender) || (_fundManager() == msg.sender),
-            "Not governance nor fund manager"
+            "Not governance or fund manager"
         );
         _;
     }
 
-    modifier onlyFundManagerOrGovernanceOrRelayer() {
+    modifier onlyFundManagerOrRelayer() {
         require(
-            (_governance() == msg.sender) ||
-                (_fundManager() == msg.sender) ||
-                (_relayer() == msg.sender),
-            "Not governance nor fund manager nor relayer"
+            (_fundManager() == msg.sender) || (_relayer() == msg.sender),
+            "Not fund manager or relayer"
         );
         _;
     }
@@ -130,7 +142,7 @@ contract Fund is
         _;
     }
 
-    function fundManager() external view returns (address) {
+    function fundManager() external view override returns (address) {
         return _fundManager();
     }
 
@@ -150,12 +162,12 @@ contract Fund is
         return _decimals();
     }
 
-    function getStrategyCount() internal view returns (uint256) {
+    function _getStrategyCount() internal view returns (uint256) {
         return strategyList.length;
     }
 
     modifier whenStrategyDefined() {
-        require(getStrategyCount() > 0, "Strategies must be defined");
+        require(_getStrategyCount() > 0, "Strategies must be defined");
         _;
     }
 
@@ -184,7 +196,7 @@ contract Fund is
      */
     function underlyingBalanceWithInvestment() internal view returns (uint256) {
         uint256 underlyingBalance = underlyingBalanceInFund();
-        for (uint256 i; i < getStrategyCount(); i++) {
+        for (uint256 i; i < _getStrategyCount(); i++) {
             underlyingBalance = underlyingBalance.add(
                 IStrategy(strategyList[i]).investedUnderlyingBalance()
             );
@@ -244,7 +256,7 @@ contract Fund is
         address newStrategy,
         uint256 weightage,
         uint256 performanceFeeStrategy
-    ) external onlyFundManagerOrGovernance {
+    ) external onlyFundManager {
         require(newStrategy != ZERO_ADDRESS, "new newStrategy cannot be empty");
         require(
             IStrategy(newStrategy).fund() == address(this),
@@ -253,6 +265,10 @@ contract Fund is
         require(
             isActiveStrategy(newStrategy) == false,
             "This strategy is already active in this fund"
+        );
+        require(
+            _getStrategyCount() + 1 <= MAX_ACTIVE_STRATEGIES,
+            "Can not add more strategies"
         );
         require(weightage > 0, "The weightage should be greater than 0");
         uint256 totalWeightInStrategies =
@@ -270,13 +286,10 @@ contract Fund is
         _setTotalWeightInStrategies(totalWeightInStrategies);
         // solhint-disable-next-line not-rely-on-time
         strategies[newStrategy].activation = block.timestamp;
-        strategies[newStrategy].indexInList = getStrategyCount();
+        strategies[newStrategy].indexInList = _getStrategyCount();
         strategies[newStrategy].performanceFeeStrategy = performanceFeeStrategy;
         strategyList.push(newStrategy);
         _setShouldRebalance(true);
-
-        IERC20(_underlying()).safeApprove(newStrategy, 0);
-        IERC20(_underlying()).safeApprove(newStrategy, type(uint256).max);
 
         emit StrategyAdded(newStrategy, weightage, performanceFeeStrategy);
     }
@@ -297,7 +310,7 @@ contract Fund is
         _setTotalWeightInStrategies(
             _totalWeightInStrategies().sub(strategies[activeStrategy].weightage)
         );
-        uint256 totalStrategies = getStrategyCount();
+        uint256 totalStrategies = _getStrategyCount();
         for (
             uint256 i = strategies[activeStrategy].indexInList;
             i < totalStrategies - 1;
@@ -308,7 +321,6 @@ contract Fund is
         }
         strategyList.pop();
         delete strategies[activeStrategy];
-        IERC20(_underlying()).safeApprove(activeStrategy, 0);
         IStrategy(activeStrategy).withdrawAllToFund();
         _setShouldRebalance(true);
 
@@ -318,7 +330,7 @@ contract Fund is
     function updateStrategyWeightage(
         address activeStrategy,
         uint256 newWeightage
-    ) external onlyFundManagerOrGovernance {
+    ) external onlyFundManager {
         require(
             activeStrategy != ZERO_ADDRESS,
             "current strategy cannot be empty"
@@ -347,7 +359,7 @@ contract Fund is
     function updateStrategyPerformanceFee(
         address activeStrategy,
         uint256 newPerformanceFeeStrategy
-    ) external onlyFundManagerOrGovernance {
+    ) external onlyFundManager {
         require(
             activeStrategy != ZERO_ADDRESS,
             "current strategy cannot be empty"
@@ -370,68 +382,126 @@ contract Fund is
         );
     }
 
+    /**
+     *** This checks for all the three fees,
+     *** strategy creator fee (on profit) for each strategy,
+     *** fund manager fee (on total fund profit),
+     *** and platform fee based on assets under management.
+     *** The fee is calculated in underlying, and disbursed in fund shares.
+     *** Fund shares are minted for the same using current price per share of the fund.
+     *** This is same as getting the fee in underlying and
+     *** then depositing the underlying back in the fund.
+     **/
     function processFees() internal {
-        uint256 profitToFund = 0;
+        uint256 totalStrategies = _getStrategyCount();
+        uint256[] memory strategyCreatorFees = new uint256[](totalStrategies);
+        uint256[] memory strategyProfits = new uint256[](totalStrategies);
+        uint256 profitToFund = 0; // Profit to fund is the profit from each strategy minus the fee paid out to strategy creators.
+        uint256 totalFee = 0; // This will represent the total fee in underlying and will be used to mint fund shares.
 
-        for (uint256 i; i < getStrategyCount(); i++) {
+        for (uint256 i; i < totalStrategies; i++) {
             address strategy = strategyList[i];
 
-            uint256 profit = 0;
+            uint256 profit = 0; // Profit for this strategy
             uint256 strategyCreatorFee = 0;
 
             if (
+                // If there is profit
                 IStrategy(strategy).investedUnderlyingBalance() >
                 strategies[strategy].lastBalance
             ) {
                 profit =
                     IStrategy(strategy).investedUnderlyingBalance() -
-                    strategies[strategy].lastBalance;
+                    strategies[strategy].lastBalance; // Profit for this strategy
                 strategyCreatorFee = profit
                     .mul(strategies[strategy].performanceFeeStrategy)
-                    .div(MAX_BPS);
-                if (
-                    strategyCreatorFee > 0 &&
-                    strategyCreatorFee < underlyingBalanceInFund()
-                ) {
-                    IERC20(_underlying()).safeTransfer(
-                        IStrategy(strategy).creator(),
-                        strategyCreatorFee
-                    );
-                }
+                    .div(MAX_BPS); // Fee to be paid to the creator based on the profit it made in the last cycle
+                strategyProfits[i] = profit;
+                strategyCreatorFees[i] = strategyCreatorFee;
+                totalFee = totalFee.add(strategyCreatorFee);
                 profitToFund = profitToFund.add(profit).sub(strategyCreatorFee);
             }
-            emit StrategyRewards(strategy, profit, strategyCreatorFee);
+            strategies[strategy].lastBalance = IStrategy(strategy)
+                .investedUnderlyingBalance(); // Update the last balance
         }
 
         uint256 fundManagerFee =
-            profitToFund.mul(_performanceFeeFund()).div(MAX_BPS);
-        if (fundManagerFee > 0 && fundManagerFee < underlyingBalanceInFund()) {
-            address fundManagerRewards =
-                (_fundManager() == _governance())
-                    ? _platformRewards()
-                    : _fundManager();
-            IERC20(_underlying()).safeTransfer(
-                fundManagerRewards,
-                fundManagerFee
-            );
-            emit FundManagerRewards(profitToFund, fundManagerFee);
-        }
+            profitToFund.mul(_performanceFeeFund()).div(MAX_BPS); // Fee to be paid to the fund manager based on the profit fund made in the last cycle
+        totalFee = totalFee.add(fundManagerFee);
+
+        uint256 timeSinceLastHardwork =
+            // solhint-disable-next-line not-rely-on-time
+            block.timestamp.sub(_lastHardworkTimestamp()); // The time between 2 hardwork cycles
+        uint256 totalInvested = _totalInvested(); // Was updated during last cycle of hard work
 
         uint256 platformFee =
-            // solhint-disable-next-line not-rely-on-time
-            (_totalInvested() * (block.timestamp - _lastHardworkTimestamp()))
-                .mul(_platformFee())
-                .div(MAX_BPS)
-                .div(SECS_PER_YEAR);
+            totalInvested.mul(timeSinceLastHardwork).mul(_platformFee()).div(
+                MAX_BPS * SECS_PER_YEAR
+            ); // Platform fee is based on the AUM
+        totalFee = totalFee.add(platformFee);
 
-        if (platformFee > 0 && platformFee < underlyingBalanceInFund()) {
-            IERC20(_underlying()).safeTransfer(_platformRewards(), platformFee);
+        uint256 totalFeeInShares =
+            (totalFee == 0 || totalSupply() == 0)
+                ? totalFee
+                : totalFee.mul(totalSupply()).div(
+                    underlyingBalanceWithInvestment()
+                ); // If total fee is zero, totalFeeInShares is also 0. Otherwise, go to default share calculation. Similar to deposit.
+        if (totalFeeInShares > 0) {
+            _mint(address(this), totalFeeInShares); // Mint all the fee shares once to save on gas and have a consistent price per share for all.
+        }
+
+        // From the total minted shares, each strategy creator, fund manager and platform will get shares in the ratio of the fees.
+
+        for (uint256 i; i < totalStrategies; i++) {
+            if (strategyCreatorFees[i] > 0) {
+                uint256 strategyCreatorFeeInShares =
+                    totalFeeInShares.mul(strategyCreatorFees[i]).div(totalFee);
+                if (strategyCreatorFeeInShares > 0) {
+                    address strategy = strategyList[i];
+                    IERC20(address(this)).safeTransfer(
+                        IStrategy(strategy).creator(),
+                        strategyCreatorFeeInShares
+                    ); // Transfer the shares to strategy creator
+                    emit StrategyRewards(
+                        strategy,
+                        strategyProfits[i],
+                        strategyCreatorFeeInShares
+                    );
+                }
+            }
+        }
+
+        if (fundManagerFee > 0) {
+            uint256 fundManagerFeeInShares =
+                totalFeeInShares.mul(fundManagerFee).div(totalFee);
+            if (fundManagerFeeInShares > 0) {
+                address fundManagerRewards =
+                    (_fundManager() == _governance())
+                        ? _platformRewards()
+                        : _fundManager();
+                IERC20(address(this)).safeTransfer(
+                    fundManagerRewards,
+                    fundManagerFeeInShares
+                ); // Transfer the shares to fund manager
+                emit FundManagerRewards(profitToFund, fundManagerFeeInShares);
+            }
+        }
+
+        if (platformFee > 0) {
+            uint256 platformFeeInShares =
+                totalFeeInShares.mul(platformFee).div(totalFee);
             emit PlatformRewards(
-                _totalInvested(),
-                // solhint-disable-next-line not-rely-on-time
-                block.timestamp - _lastHardworkTimestamp(),
-                platformFee
+                totalInvested,
+                timeSinceLastHardwork,
+                platformFeeInShares
             );
+        }
+
+        // transfer the rest including platformFeeInShares and any dust remaining
+        // (since this contract will never have shares of itself apart from fees.)
+        uint256 selfBalance = IERC20(address(this)).balanceOf(address(this));
+        if (selfBalance > 0) {
+            IERC20(address(this)).safeTransfer(_platformRewards(), selfBalance);
         }
     }
 
@@ -440,8 +510,9 @@ contract Fund is
      */
     function doHardWork()
         external
+        nonReentrant
         whenStrategyDefined
-        onlyFundManagerOrGovernanceOrRelayer
+        onlyFundManagerOrRelayer
     {
         if (_lastHardworkTimestamp() > 0) {
             processFees();
@@ -463,8 +534,9 @@ contract Fund is
     }
 
     function doHardWorkWithoutRebalance() internal {
+        uint256 totalAccounted = _totalAccounted();
         uint256 lastReserve =
-            _totalAccounted() > 0 ? _totalAccounted().sub(_totalInvested()) : 0;
+            totalAccounted > 0 ? totalAccounted.sub(_totalInvested()) : 0;
         uint256 availableAmountToInvest =
             underlyingBalanceInFund() > lastReserve
                 ? underlyingBalanceInFund().sub(lastReserve)
@@ -474,10 +546,10 @@ contract Fund is
             return;
         }
 
-        _setTotalAccounted(_totalAccounted().add(availableAmountToInvest));
+        _setTotalAccounted(totalAccounted.add(availableAmountToInvest));
         uint256 totalInvested = 0;
 
-        for (uint256 i; i < getStrategyCount(); i++) {
+        for (uint256 i; i < _getStrategyCount(); i++) {
             address strategy = strategyList[i];
             uint256 availableAmountForStrategy =
                 availableAmountToInvest.mul(strategies[strategy].weightage).div(
@@ -505,9 +577,10 @@ contract Fund is
             underlyingBalanceWithInvestment();
         _setTotalAccounted(totalUnderlyingWithInvestment);
         uint256 totalInvested = 0;
-        uint256[] memory toDeposit = new uint256[](getStrategyCount());
+        uint256 totalStrategies = _getStrategyCount();
+        uint256[] memory toDeposit = new uint256[](totalStrategies);
 
-        for (uint256 i; i < getStrategyCount(); i++) {
+        for (uint256 i; i < totalStrategies; i++) {
             address strategy = strategyList[i];
             uint256 shouldBeInStrategy =
                 totalUnderlyingWithInvestment
@@ -528,7 +601,7 @@ contract Fund is
         }
         _setTotalInvested(totalInvested);
 
-        for (uint256 i; i < getStrategyCount(); i++) {
+        for (uint256 i; i < totalStrategies; i++) {
             address strategy = strategyList[i];
             if (toDeposit[i] > 0) {
                 IERC20(_underlying()).safeTransfer(strategy, toDeposit[i]);
@@ -622,13 +695,17 @@ contract Fund is
 
         uint256 underlyingAmountToWithdraw =
             _underlyingFromShares(numberOfShares);
+        require(underlyingAmountToWithdraw > 0, "Can't withdraw 0");
+
         _burn(msg.sender, numberOfShares);
 
-        if (underlyingAmountToWithdraw > underlyingBalanceInFund()) {
+        if (underlyingAmountToWithdraw == underlyingBalanceInFund()) {
+            _setShouldRebalance(true);
+        } else if (underlyingAmountToWithdraw > underlyingBalanceInFund()) {
             uint256 missing =
                 underlyingAmountToWithdraw.sub(underlyingBalanceInFund());
             uint256 missingCarryOver;
-            for (uint256 i; i < getStrategyCount(); i++) {
+            for (uint256 i; i < _getStrategyCount(); i++) {
                 if (isActiveStrategy(strategyList[i])) {
                     uint256 balanceBefore = underlyingBalanceInFund();
                     uint256 weightage = strategies[strategyList[i]].weightage;
@@ -651,25 +728,12 @@ contract Fund is
             _setShouldRebalance(true);
         }
 
-        uint256 withdrawalFee =
-            underlyingAmountToWithdraw.mul(_withdrawalFee()).div(MAX_BPS);
-
-        if (withdrawalFee > 0) {
-            IERC20(_underlying()).safeTransfer(
-                _platformRewards(),
-                withdrawalFee
-            );
-            underlyingAmountToWithdraw = underlyingAmountToWithdraw.sub(
-                withdrawalFee
-            );
-        }
-
         IERC20(_underlying()).safeTransfer(
             msg.sender,
             underlyingAmountToWithdraw
         );
 
-        emit Withdraw(msg.sender, underlyingAmountToWithdraw, withdrawalFee);
+        emit Withdraw(msg.sender, underlyingAmountToWithdraw);
     }
 
     /**
@@ -679,16 +743,24 @@ contract Fund is
         external
         onlyGovernance
     {
-        // Timelock implementation can be done here later
         _setNextImplementation(newImplementation);
+        // solhint-disable-next-line not-rely-on-time
+        _setNextImplementationTimestamp(block.timestamp.add(_changeDelay()));
     }
 
     function shouldUpgrade() external view override returns (bool, address) {
-        return (_nextImplementation() != address(0), _nextImplementation());
+        return (
+            _nextImplementationTimestamp() != 0 &&
+                // solhint-disable-next-line not-rely-on-time
+                block.timestamp > _nextImplementationTimestamp() &&
+                _nextImplementation() != ZERO_ADDRESS,
+            _nextImplementation()
+        );
     }
 
     function finalizeUpgrade() external override onlyGovernance {
-        _setNextImplementation(address(0));
+        _setNextImplementation(ZERO_ADDRESS);
+        _setNextImplementationTimestamp(0);
     }
 
     function setFundManager(address newFundManager)
@@ -698,10 +770,7 @@ contract Fund is
         _setFundManager(newFundManager);
     }
 
-    function setRelayer(address newRelayer)
-        external
-        onlyFundManagerOrGovernance
-    {
+    function setRelayer(address newRelayer) external onlyFundManager {
         _setRelayer(newRelayer);
     }
 
@@ -709,26 +778,20 @@ contract Fund is
         _setPlatformRewards(newRewards);
     }
 
-    function setShouldRebalance(bool trigger)
-        external
-        onlyFundManagerOrGovernance
-    {
+    function setShouldRebalance(bool trigger) external onlyFundManager {
         _setShouldRebalance(trigger);
     }
 
     function setMaxInvestmentInStrategies(uint256 value)
         external
-        onlyFundManagerOrGovernance
+        onlyFundManager
     {
         require(value < MAX_BPS, "Value greater than 100%");
         _setMaxInvestmentInStrategies(value);
     }
 
     // if limit == 0 then there is no deposit limit
-    function setDepositLimit(uint256 limit)
-        external
-        onlyFundManagerOrGovernance
-    {
+    function setDepositLimit(uint256 limit) external onlyFundManager {
         _setDepositLimit(limit);
     }
 
@@ -737,10 +800,11 @@ contract Fund is
     }
 
     // if limit == 0 then there is no deposit limit
-    function setDepositLimitTxMax(uint256 limit)
-        external
-        onlyFundManagerOrGovernance
-    {
+    function setDepositLimitTxMax(uint256 limit) external onlyFundManager {
+        require(
+            _depositLimitTxMin() == 0 || limit > _depositLimitTxMin(),
+            "Max limit greater than min limit"
+        );
         _setDepositLimitTxMax(limit);
     }
 
@@ -749,10 +813,11 @@ contract Fund is
     }
 
     // if limit == 0 then there is no deposit limit
-    function setDepositLimitTxMin(uint256 limit)
-        external
-        onlyFundManagerOrGovernance
-    {
+    function setDepositLimitTxMin(uint256 limit) external onlyFundManager {
+        require(
+            _depositLimitTxMax() == 0 || limit < _depositLimitTxMax(),
+            "Min limit greater than max limit"
+        );
         _setDepositLimitTxMin(limit);
     }
 
@@ -760,10 +825,7 @@ contract Fund is
         return _depositLimitTxMin();
     }
 
-    function setPerformanceFeeFund(uint256 fee)
-        external
-        onlyFundManagerOrGovernance
-    {
+    function setPerformanceFeeFund(uint256 fee) external onlyFundManager {
         require(fee <= MAX_PERFORMANCE_FEE_FUND, "Fee greater than max limit");
         _setPerformanceFeeFund(fee);
     }
@@ -772,7 +834,7 @@ contract Fund is
         return _performanceFeeFund();
     }
 
-    function setPlatformFee(uint256 fee) external onlyFundManagerOrGovernance {
+    function setPlatformFee(uint256 fee) external onlyGovernance {
         require(fee <= MAX_PLATFORM_FEE, "Fee greater than max limit");
         _setPlatformFee(fee);
     }
@@ -781,21 +843,10 @@ contract Fund is
         return _platformFee();
     }
 
-    function setWithdrawalFee(uint256 fee)
-        external
-        onlyFundManagerOrGovernance
-    {
-        require(fee <= MAX_WITHDRAWAL_FEE, "Fee greater than max limit");
-        _setWithdrawalFee(fee);
-    }
-
-    function withdrawalFee() external view returns (uint256) {
-        return _withdrawalFee();
-    }
-
     // no tokens should ever be stored on this contract. Any tokens that are sent here by mistake are recoverable by governance
     function sweep(address _token, address _sweepTo) external onlyGovernance {
         require(_token != address(_underlying()), "can not sweep underlying");
+        require(_sweepTo != ZERO_ADDRESS, "can not sweep to zero");
         IERC20(_token).safeTransfer(
             _sweepTo,
             IERC20(_token).balanceOf(address(this))

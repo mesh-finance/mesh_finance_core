@@ -71,6 +71,10 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
 
     uint256 internal constant MAX_BPS = 10000;
 
+    uint256 internal constant PRECISION = 10**18;
+
+    uint256 internal constant MAX_DECIMAL = 18;
+
     // these tokens cannot be claimed by the governance
     mapping(address => bool) public canNotSweep;
 
@@ -92,6 +96,15 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
         bool _useUnderlying
     ) public {
         require(_fund != address(0), "Fund cannot be empty");
+        require(_crvPool != address(0), "Curve Pool cannot be empty");
+        require(
+            _crvPoolToken != address(0),
+            "Curve Pool token cannot be empty"
+        );
+        require(
+            _crvPoolGauge != address(0),
+            "Curve Pool gauge cannot be empty"
+        );
         fund = _fund;
         address _underlying = IFund(_fund).underlying();
         underlying = _underlying;
@@ -130,10 +143,6 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
         _baseCurrency = baseCurrency_;
         creator = msg.sender;
 
-        // approve max amount to save on gas costs later
-        IERC20(_underlying).safeApprove(_crvPool, type(uint256).max);
-        IERC20(_crvPoolToken).safeApprove(_crvPoolGauge, type(uint256).max);
-
         // restricted tokens, can not be swept
         canNotSweep[_underlying] = true;
         canNotSweep[_crvPoolToken] = true;
@@ -148,8 +157,17 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
         return IGovernable(fund).governance();
     }
 
+    function _fundManager() internal view returns (address) {
+        return IFund(fund).fundManager();
+    }
+
     function _relayer() internal view returns (address) {
         return IFund(fund).relayer();
+    }
+
+    modifier onlyFund() {
+        require(msg.sender == fund, "The sender has to be the fund");
+        _;
     }
 
     modifier onlyFundOrGovernance() {
@@ -160,18 +178,24 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
         _;
     }
 
-    modifier onlyFundOrGovernanceorRelayer() {
+    modifier onlyFundManagerOrGovernance() {
         require(
-            msg.sender == fund ||
-                msg.sender == _governance() ||
-                msg.sender == _relayer(),
-            "The sender has to be the governance or fund or relayer"
+            msg.sender == _fundManager() || msg.sender == _governance(),
+            "The sender has to be the governance or fund manager"
+        );
+        _;
+    }
+
+    modifier onlyFundManagerOrRelayer() {
+        require(
+            msg.sender == _fundManager() || msg.sender == _relayer(),
+            "The sender has to be the relayer or fund manager"
         );
         _;
     }
 
     /**
-     *  TODO
+     *  Not used for now
      */
     function depositArbCheck() public view override returns (bool) {
         return true;
@@ -179,7 +203,7 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
 
     function setInvestActivated(bool _investActivated)
         external
-        onlyFundOrGovernance
+        onlyFundManagerOrGovernance
     {
         investActivated = _investActivated;
     }
@@ -218,7 +242,7 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
      */
     function withdrawPartialShares(uint256 _crvPoolTokens)
         external
-        onlyFundOrGovernance
+        onlyFundManagerOrGovernance
     {
         _withdrawCrvPoolTokens(_crvPoolTokens);
     }
@@ -231,7 +255,7 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
     function withdrawToFund(uint256 underlyingAmount)
         external
         override
-        onlyFundOrGovernance
+        onlyFund
     {
         uint256 underlyingBalanceBefore =
             IERC20(underlying).balanceOf(address(this));
@@ -258,17 +282,19 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
         // we can transfer the asset to the fund
         uint256 underlyingBalance = IERC20(underlying).balanceOf(address(this));
         if (underlyingBalance > 0) {
-            IERC20(underlying).safeTransfer(
-                fund,
-                Math.min(underlyingAmount, underlyingBalance)
-            );
+            if (underlyingAmount < underlyingBalance) {
+                IERC20(underlying).safeTransfer(fund, underlyingAmount);
+                _investAllUnderlying();
+            } else {
+                IERC20(underlying).safeTransfer(fund, underlyingBalance);
+            }
         }
     }
 
     /**
      * Withdraws all assets from the Curve Pool to fund.
      */
-    function withdrawAllToFund() external override onlyFundOrGovernance {
+    function withdrawAllToFund() external override onlyFund {
         uint256 _crvPoolTokens = IERC20(crvPoolGauge).balanceOf(address(this));
         _withdrawCrvPoolTokens(_crvPoolTokens);
 
@@ -288,6 +314,9 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
 
         uint256 underlyingBalance = IERC20(underlying).balanceOf(address(this));
         if (underlyingBalance > 0) {
+            // approve amount per transaction
+            IERC20(underlying).safeApprove(crvPool, 0);
+            IERC20(underlying).safeApprove(crvPool, underlyingBalance);
             uint256[3] memory amounts;
             amounts[crvId] = underlyingBalance;
             uint256 expectedOut =
@@ -305,6 +334,9 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
         // deposit lptokens to the gauge
         uint256 crvPoolTokens = IERC20(crvPoolToken).balanceOf(address(this));
         if (crvPoolTokens > 0) {
+            // approve amount per transaction
+            IERC20(crvPoolToken).safeApprove(crvPoolGauge, 0);
+            IERC20(crvPoolToken).safeApprove(crvPoolGauge, crvPoolTokens);
             ICurveGauge(crvPoolGauge).deposit(crvPoolTokens);
         }
     }
@@ -312,7 +344,7 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
     /**
      * The hard work only invests all underlying assets
      */
-    function doHardWork() external override onlyFundOrGovernance {
+    function doHardWork() external override onlyFund {
         _investAllUnderlying();
     }
 
@@ -320,6 +352,7 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
     function sweep(address _token, address _sweepTo) external {
         require(_governance() == msg.sender, "Not governance");
         require(!canNotSweep[_token], "Token is restricted");
+        require(_sweepTo != address(0), "can not sweep to zero");
         IERC20(_token).safeTransfer(
             _sweepTo,
             IERC20(_token).balanceOf(address(this))
@@ -382,7 +415,10 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
         return uint256(PriceFeedLibrary._getPrice(rewardTokenPriceFeed));
     }
 
-    function updateSlippage(uint256 newSlippage) external onlyFundOrGovernance {
+    function updateSlippage(uint256 newSlippage)
+        external
+        onlyFundManagerOrGovernance
+    {
         require(newSlippage > 0, "The slippage should be greater than 0");
         require(
             newSlippage < MAX_BPS,
@@ -438,7 +474,7 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
      */
     function claimLiquidateAndReinvestRewards()
         external
-        onlyFundOrGovernanceorRelayer
+        onlyFundManagerOrRelayer
     {
         // _claimCRVRewards();  // Not needed for polygon
         // _liquidateCRVRewards();  // Not needed for polygon
@@ -448,10 +484,16 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
     }
 
     function _virtualPriceInUnderlying() internal view returns (uint256) {
-        if (ERC20(underlying).decimals() < 18) {
+        if (ERC20(underlying).decimals() < MAX_DECIMAL) {
             return
                 ICurveFi(crvPool).get_virtual_price().div(
-                    10**(uint256(uint8(18) - ERC20(underlying).decimals()))
+                    10 **
+                        (
+                            uint256(
+                                uint8(MAX_DECIMAL) -
+                                    ERC20(underlying).decimals()
+                            )
+                        )
                 );
         } else {
             return ICurveFi(crvPool).get_virtual_price();
@@ -477,7 +519,7 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
         //we want to choose lower value of virtual price and amount we really get out
         //this means we will always underestimate current assets.
         uint256 virtualOut =
-            _virtualPriceInUnderlying().mul(_crvPoolTokens).div(1e18);
+            _virtualPriceInUnderlying().mul(_crvPoolTokens).div(PRECISION);
 
         uint256 realOut =
             ICurveFi(crvPool).calc_withdraw_one_coin(

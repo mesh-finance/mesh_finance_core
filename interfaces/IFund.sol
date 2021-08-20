@@ -4,6 +4,8 @@ pragma solidity 0.6.12;
 interface IFund {
     function underlying() external view returns (address);
 
+    function fundManager() external view returns (address);
+
     function relayer() external view returns (address);
 
     function deposit(uint256 amountWei) external;

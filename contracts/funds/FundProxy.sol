@@ -20,7 +20,10 @@ contract FundProxy is UpgradeableProxy {
      * the governance can upgrade the vault
      */
     function upgrade(address newImplementation) external {
-        // oldImplementation is unused for now
+        require(
+            newImplementation != address(0),
+            "new fund implementation cannot be empty"
+        );
         // solhint-disable-next-line no-unused-vars
         (bool should, address nextImplementation) =
             IUpgradeSource(address(this)).shouldUpgrade();

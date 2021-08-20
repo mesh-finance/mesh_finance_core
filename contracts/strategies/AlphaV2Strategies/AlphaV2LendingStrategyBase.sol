@@ -43,6 +43,8 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
     address internal constant WETH =
         address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
+    uint256 internal constant PRECISION = 10**18;
+
     // these tokens cannot be claimed by the governance
     mapping(address => bool) public canNotSweep;
 
@@ -62,9 +64,6 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
         cToken = IAlphaV2(_aBox).cToken();
         creator = msg.sender;
 
-        // approve max amount to save on gas costs later
-        IERC20(_underlying).safeApprove(_aBox, type(uint256).max);
-
         // restricted tokens, can not be swept
         canNotSweep[_underlying] = true;
         canNotSweep[_aBox] = true;
@@ -77,6 +76,19 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
         return IGovernable(fund).governance();
     }
 
+    function _fundManager() internal view returns (address) {
+        return IFund(fund).fundManager();
+    }
+
+    function _relayer() internal view returns (address) {
+        return IFund(fund).relayer();
+    }
+
+    modifier onlyFund() {
+        require(msg.sender == fund, "The sender has to be the fund");
+        _;
+    }
+
     modifier onlyFundOrGovernance() {
         require(
             msg.sender == fund || msg.sender == _governance(),
@@ -85,8 +97,24 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
         _;
     }
 
+    modifier onlyFundManagerOrGovernance() {
+        require(
+            msg.sender == _fundManager() || msg.sender == _governance(),
+            "The sender has to be the governance or fund manager"
+        );
+        _;
+    }
+
+    modifier onlyFundManagerOrRelayer() {
+        require(
+            msg.sender == _fundManager() || msg.sender == _relayer(),
+            "The sender has to be the relayer or fund manager"
+        );
+        _;
+    }
+
     /**
-     *  TODO
+     *  Not used for now
      */
     function depositArbCheck() public view override returns (bool) {
         return true;
@@ -94,18 +122,18 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
 
     /**
      * Allows Governance to withdraw partial shares to reduce slippage incurred
-     *  and facilitate migration / withdrawal / strategy switch
+     *  and facilitate migration / withdrawal / strategy switch / emergency
      */
     function withdrawPartialShares(uint256 shares)
         external
-        onlyFundOrGovernance
+        onlyFundManagerOrGovernance
     {
         IAlphaV2(aBox).withdraw(shares);
     }
 
     function setInvestActivated(bool _investActivated)
         external
-        onlyFundOrGovernance
+        onlyFundManagerOrGovernance
     {
         investActivated = _investActivated;
     }
@@ -119,7 +147,7 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
     function withdrawToFund(uint256 underlyingAmount)
         external
         override
-        onlyFundOrGovernance
+        onlyFund
     {
         uint256 underlyingBalanceBefore =
             IERC20(underlying).balanceOf(address(this));
@@ -145,17 +173,19 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
         // we can transfer the asset to the fund
         uint256 underlyingBalance = IERC20(underlying).balanceOf(address(this));
         if (underlyingBalance > 0) {
-            IERC20(underlying).safeTransfer(
-                fund,
-                Math.min(underlyingAmount, underlyingBalance)
-            );
+            if (underlyingAmount < underlyingBalance) {
+                IERC20(underlying).safeTransfer(fund, underlyingAmount);
+                _investAllUnderlying();
+            } else {
+                IERC20(underlying).safeTransfer(fund, underlyingBalance);
+            }
         }
     }
 
     /**
      * Withdraws all assets from the Alpha V2 Lending Box and transfers to Fund.
      */
-    function withdrawAllToFund() external override onlyFundOrGovernance {
+    function withdrawAllToFund() external override onlyFund {
         uint256 shares = IAlphaV2(aBox).balanceOf(address(this));
         IAlphaV2(aBox).withdraw(shares);
         uint256 underlyingBalance = IERC20(underlying).balanceOf(address(this));
@@ -174,6 +204,9 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
 
         uint256 underlyingBalance = IERC20(underlying).balanceOf(address(this));
         if (underlyingBalance > 0) {
+            // approve amount per transaction
+            IERC20(underlying).safeApprove(aBox, 0);
+            IERC20(underlying).safeApprove(aBox, underlyingBalance);
             // deposits the entire balance to Alpha V2 Lending Box
             IAlphaV2(aBox).deposit(underlyingBalance);
         }
@@ -182,7 +215,7 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
     /**
      * The hard work only invests all underlying assets
      */
-    function doHardWork() external override onlyFundOrGovernance {
+    function doHardWork() external override onlyFund {
         _investAllUnderlying();
     }
 
@@ -190,6 +223,7 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
     function sweep(address _token, address _sweepTo) external {
         require(_governance() == msg.sender, "Not governance");
         require(!canNotSweep[_token], "Token is restricted");
+        require(_sweepTo != address(0), "can not sweep to zero");
         IERC20(_token).safeTransfer(
             _sweepTo,
             IERC20(_token).balanceOf(address(this))
@@ -229,13 +263,22 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
                 ];
             if (underlyingAmountOut != 0) {
                 IERC20(rewardToken).safeApprove(_uniswapRouter, rewardAmount);
+                uint256 underlyingBalanceBefore =
+                    IERC20(underlying).balanceOf(address(this));
                 uniswapRouter.swapExactTokensForTokens(
                     rewardAmount,
                     minUnderlyingExpected,
                     path,
                     address(this),
                     // solhint-disable-next-line not-rely-on-time
-                    now + 30
+                    now
+                );
+                uint256 underlyingBalanceAfter =
+                    IERC20(underlying).balanceOf(address(this));
+                require(
+                    underlyingBalanceAfter.sub(underlyingBalanceBefore) >=
+                        minUnderlyingExpected,
+                    "Not liquidated properly"
                 );
                 _investAllUnderlying();
             }
@@ -248,7 +291,7 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
      */
     function liquidateRewardsAndReinvest(uint256 minUnderlyingExpected)
         external
-        onlyFundOrGovernance
+        onlyFundManagerOrRelayer
     {
         _liquidateRewardsAndReinvest(minUnderlyingExpected);
     }
@@ -265,7 +308,7 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
     {
         uint256 shares = IERC20(aBox).balanceOf(address(this));
         uint256 exchangeRate = ICErc20(cToken).exchangeRateStored();
-        uint256 precision = 10**18;
+        uint256 precision = PRECISION;
         uint256 underlyingBalanceinABox =
             shares.mul(exchangeRate).div(precision);
         return
@@ -283,7 +326,7 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
         returns (uint256)
     {
         return
-            underlyingAmount.mul(10**18).div(
+            underlyingAmount.mul(PRECISION).div(
                 ICErc20(cToken).exchangeRateStored()
             );
     }

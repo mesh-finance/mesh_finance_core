@@ -3,9 +3,9 @@
 pragma solidity 0.6.12;
 
 interface ICurveFi {
-    function coins(uint256) external returns (address);
+    function coins(uint256) external view returns (address);
 
-    function underlying_coins(uint256) external returns (address);
+    function underlying_coins(uint256) external view returns (address);
 
     function get_virtual_price() external view returns (uint256);
 
