@@ -44,9 +44,6 @@ abstract contract YearnV2StrategyBase is IStrategy {
         yVault = _yVault;
         creator = msg.sender;
 
-        // approve max amount to save on gas costs later
-        IERC20(_underlying).safeApprove(_yVault, type(uint256).max);
-
         // restricted tokens, can not be swept
         canNotSweep[_underlying] = true;
         canNotSweep[_yVault] = true;
@@ -58,6 +55,19 @@ abstract contract YearnV2StrategyBase is IStrategy {
         return IGovernable(fund).governance();
     }
 
+    function _fundManager() internal view returns (address) {
+        return IFund(fund).fundManager();
+    }
+
+    function _relayer() internal view returns (address) {
+        return IFund(fund).relayer();
+    }
+
+    modifier onlyFund() {
+        require(msg.sender == fund, "The sender has to be the fund");
+        _;
+    }
+
     modifier onlyFundOrGovernance() {
         require(
             msg.sender == fund || msg.sender == _governance(),
@@ -66,8 +76,24 @@ abstract contract YearnV2StrategyBase is IStrategy {
         _;
     }
 
+    modifier onlyFundManagerOrGovernance() {
+        require(
+            msg.sender == _fundManager() || msg.sender == _governance(),
+            "The sender has to be the governance or fund manager"
+        );
+        _;
+    }
+
+    modifier onlyFundManagerOrRelayer() {
+        require(
+            msg.sender == _fundManager() || msg.sender == _relayer(),
+            "The sender has to be the relayer or fund manager"
+        );
+        _;
+    }
+
     /**
-     *  TODO
+     *  Not used for now
      */
 
     function depositArbCheck() public view override returns (bool) {
@@ -80,14 +106,14 @@ abstract contract YearnV2StrategyBase is IStrategy {
      */
     function withdrawPartialShares(uint256 shares)
         external
-        onlyFundOrGovernance
+        onlyFundManagerOrGovernance
     {
         IYVaultV2(yVault).withdraw(shares);
     }
 
     function setInvestActivated(bool _investActivated)
         external
-        onlyFundOrGovernance
+        onlyFundManagerOrGovernance
     {
         investActivated = _investActivated;
     }
@@ -101,7 +127,7 @@ abstract contract YearnV2StrategyBase is IStrategy {
     function withdrawToFund(uint256 underlyingAmount)
         external
         override
-        onlyFundOrGovernance
+        onlyFund
     {
         uint256 underlyingBalanceBefore =
             IERC20(underlying).balanceOf(address(this));
@@ -126,17 +152,19 @@ abstract contract YearnV2StrategyBase is IStrategy {
         // we can transfer the asset to the fund
         uint256 underlyingBalance = IERC20(underlying).balanceOf(address(this));
         if (underlyingBalance > 0) {
-            IERC20(underlying).safeTransfer(
-                fund,
-                Math.min(underlyingAmount, underlyingBalance)
-            );
+            if (underlyingAmount < underlyingBalance) {
+                IERC20(underlying).safeTransfer(fund, underlyingAmount);
+                _investAllUnderlying();
+            } else {
+                IERC20(underlying).safeTransfer(fund, underlyingBalance);
+            }
         }
     }
 
     /**
      * Withdraws all assets from the yv2 vault and transfer to fund.
      */
-    function withdrawAllToFund() external override onlyFundOrGovernance {
+    function withdrawAllToFund() external override onlyFund {
         uint256 shares = IYVaultV2(yVault).balanceOf(address(this));
         IYVaultV2(yVault).withdraw(shares);
         uint256 underlyingBalance = IERC20(underlying).balanceOf(address(this));
@@ -160,6 +188,9 @@ abstract contract YearnV2StrategyBase is IStrategy {
 
         uint256 underlyingBalance = IERC20(underlying).balanceOf(address(this));
         if (underlyingBalance > 0) {
+            // approve amount per transaction
+            IERC20(underlying).safeApprove(yVault, 0);
+            IERC20(underlying).safeApprove(yVault, underlyingBalance);
             // deposits the entire balance to yv2 vault
             IYVaultV2(yVault).deposit(underlyingBalance);
         }
@@ -168,7 +199,7 @@ abstract contract YearnV2StrategyBase is IStrategy {
     /**
      * The hard work only invests all underlying assets
      */
-    function doHardWork() external override onlyFundOrGovernance {
+    function doHardWork() external override onlyFund {
         _investAllUnderlying();
     }
 
@@ -176,6 +207,7 @@ abstract contract YearnV2StrategyBase is IStrategy {
     function sweep(address _token, address _sweepTo) external {
         require(_governance() == msg.sender, "Not governance");
         require(!canNotSweep[_token], "Token is restricted");
+        require(_sweepTo != address(0), "can not sweep to zero");
         IERC20(_token).safeTransfer(
             _sweepTo,
             IERC20(_token).balanceOf(address(this))

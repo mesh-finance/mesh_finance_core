@@ -35,6 +35,12 @@ brownie test
 
 This will run all the tests in the test folder. By default, this is configured to run on the mainnet-fork.
 
+For test coverage, use coverage flag.
+
+```
+brownie test --coverage
+```
+
 You can run the tests on local ganache blockchain using development flag.
 
 ```

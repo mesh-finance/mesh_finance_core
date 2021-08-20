@@ -58,6 +58,11 @@ contract ProfitStrategy is IStrategy {
         _;
     }
 
+    modifier onlyFund() {
+        require(msg.sender == fund, "The sender has to be the fund");
+        _;
+    }
+
     /*
      * Returns the total invested amount.
      */
@@ -100,11 +105,7 @@ contract ProfitStrategy is IStrategy {
     /*
      * Cashes some amount out and withdraws to the fund
      */
-    function withdrawToFund(uint256 amount)
-        external
-        override
-        onlyFundOrGovernance
-    {
+    function withdrawToFund(uint256 amount) external override onlyFund {
         uint256 underlyingBalance = IERC20(underlying).balanceOf(address(this));
         uint256 amountTowithdraw = Math.min(underlyingBalance, amount);
         IERC20(underlying).safeTransfer(fund, amountTowithdraw);

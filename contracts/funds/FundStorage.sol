@@ -17,6 +17,8 @@ contract FundStorage is Initializable, SetGetAssembly {
         0x84e8c6b8f2281d51d9f683d351409724c3caa7848051aeb9d92c106ab36cc24c;
     bytes32 internal constant _PLATFORM_REWARDS_SLOT =
         0x92260bfe68dd0f8a9f5439b75466781ba1ce44523ed1a3026a73eada49072e65;
+    bytes32 internal constant _CHANGE_DELAY_SLOT =
+        0x0391715d0dd26b729c4ba34639ad5bdb0a7feb89f59a1e38f38485ea7f5a1583;
     bytes32 internal constant _DEPOSIT_LIMIT_SLOT =
         0xca2f8a3e9ea81335bcce793cde55fc0c38129b594f53052d2bb18099ffa72613;
     bytes32 internal constant _DEPOSIT_LIMIT_TX_MAX_SLOT =
@@ -27,8 +29,6 @@ contract FundStorage is Initializable, SetGetAssembly {
         0x5b8979500398f8fbeb42c36d18f31a76fd0ab30f4338d864e7d8734b340e9bb9;
     bytes32 internal constant _PLATFORM_FEE_SLOT =
         0x2084059f3bff3cc3fd204df32325dcb05f47c2f590aba5d103ec584523738e7a;
-    bytes32 internal constant _WITHDRAWAL_FEE_SLOT =
-        0x0fa90db0cd58feef247d70d3b21f64c03d0e3ec10eb297f015da0cc09eb3412c;
     bytes32 internal constant _MAX_INVESTMENT_IN_STRATEGIES_SLOT =
         0xe3b5969c9426551aa8f16dbc7b25042b9b9c9869b759c77a85f0b097ac363475;
     bytes32 internal constant _TOTAL_WEIGHT_IN_STRATEGIES_SLOT =
@@ -45,6 +45,8 @@ contract FundStorage is Initializable, SetGetAssembly {
         0x0260c2bf5555cd32cedf39c0fcb0eab8029c67b3d5137faeb3e24a500db80bc9;
     bytes32 internal constant _NEXT_IMPLEMENTATION_SLOT =
         0xa7ae0fa763ec3009113ccc5eb9089e1f0028607f5b8198c52cd42366c1ddb17b;
+    bytes32 internal constant _NEXT_IMPLEMENTATION_TIMESTAMP_SLOT =
+        0x5e1f7083e1d90c44893f97806d0ec517436a58b85860b28247fd6fd56f5dc897;
 
     constructor() public {
         assert(
@@ -102,6 +104,16 @@ contract FundStorage is Initializable, SetGetAssembly {
                 )
         );
         assert(
+            _CHANGE_DELAY_SLOT ==
+                bytes32(
+                    uint256(
+                        keccak256(
+                            "eip1967.mesh.finance.fundStorage.changeDelay"
+                        )
+                    ) - 1
+                )
+        );
+        assert(
             _DEPOSIT_LIMIT_SLOT ==
                 bytes32(
                     uint256(
@@ -147,16 +159,6 @@ contract FundStorage is Initializable, SetGetAssembly {
                     uint256(
                         keccak256(
                             "eip1967.mesh.finance.fundStorage.platformFee"
-                        )
-                    ) - 1
-                )
-        );
-        assert(
-            _WITHDRAWAL_FEE_SLOT ==
-                bytes32(
-                    uint256(
-                        keccak256(
-                            "eip1967.mesh.finance.fundStorage.withdrawalFee"
                         )
                     ) - 1
                 )
@@ -241,6 +243,16 @@ contract FundStorage is Initializable, SetGetAssembly {
                     ) - 1
                 )
         );
+        assert(
+            _NEXT_IMPLEMENTATION_TIMESTAMP_SLOT ==
+                bytes32(
+                    uint256(
+                        keccak256(
+                            "eip1967.mesh.finance.fundStorage.nextImplementationTimestamp"
+                        )
+                    ) - 1
+                )
+        );
     }
 
     function initializeFundStorage(
@@ -249,7 +261,8 @@ contract FundStorage is Initializable, SetGetAssembly {
         uint8 _decimals,
         address _fundManager,
         address _relayer,
-        address _platformRewards
+        address _platformRewards,
+        uint256 _changeDelay
     ) public initializer {
         _setUnderlying(_underlying);
         _setUnderlyingUnit(_underlyingUnit);
@@ -257,12 +270,12 @@ contract FundStorage is Initializable, SetGetAssembly {
         _setFundManager(_fundManager);
         _setRelayer(_relayer);
         _setPlatformRewards(_platformRewards);
+        _setChangeDelay(_changeDelay);
         _setDepositLimit(0);
         _setDepositLimitTxMax(0);
         _setDepositLimitTxMin(0);
         _setPerformanceFeeFund(0);
         _setPlatformFee(0);
-        _setWithdrawalFee(0);
         _setMaxInvestmentInStrategies(9000); // 9000 BPS (90%) can be accessed by the strategies. This is to keep something in fund for withdrawal.
         _setTotalWeightInStrategies(0);
         _setTotalAccounted(0);
@@ -271,6 +284,7 @@ contract FundStorage is Initializable, SetGetAssembly {
         _setShouldRebalance(false);
         _setLastHardworkTimestamp(0);
         _setNextImplementation(address(0));
+        _setNextImplementationTimestamp(0);
     }
 
     function _setUnderlying(address _address) internal {
@@ -321,6 +335,14 @@ contract FundStorage is Initializable, SetGetAssembly {
         return getAddress(_PLATFORM_REWARDS_SLOT);
     }
 
+    function _setChangeDelay(uint256 _value) internal {
+        setUint256(_CHANGE_DELAY_SLOT, _value);
+    }
+
+    function _changeDelay() internal view returns (uint256) {
+        return getUint256(_CHANGE_DELAY_SLOT);
+    }
+
     function _setDepositLimit(uint256 _value) internal {
         setUint256(_DEPOSIT_LIMIT_SLOT, _value);
     }
@@ -359,14 +381,6 @@ contract FundStorage is Initializable, SetGetAssembly {
 
     function _platformFee() internal view returns (uint256) {
         return getUint256(_PLATFORM_FEE_SLOT);
-    }
-
-    function _setWithdrawalFee(uint256 _value) internal {
-        setUint256(_WITHDRAWAL_FEE_SLOT, _value);
-    }
-
-    function _withdrawalFee() internal view returns (uint256) {
-        return getUint256(_WITHDRAWAL_FEE_SLOT);
     }
 
     function _setMaxInvestmentInStrategies(uint256 _value) internal {
@@ -431,6 +445,14 @@ contract FundStorage is Initializable, SetGetAssembly {
 
     function _nextImplementation() internal view returns (address) {
         return getAddress(_NEXT_IMPLEMENTATION_SLOT);
+    }
+
+    function _setNextImplementationTimestamp(uint256 _value) internal {
+        setUint256(_NEXT_IMPLEMENTATION_TIMESTAMP_SLOT, _value);
+    }
+
+    function _nextImplementationTimestamp() internal view returns (uint256) {
+        return getUint256(_NEXT_IMPLEMENTATION_TIMESTAMP_SLOT);
     }
 
     uint256[50] private bigEmptySlot;

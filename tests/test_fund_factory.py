@@ -10,8 +10,15 @@ def test_initialization(fund_factory, accounts):
 
 def test_update_governance_from_non_governance_account(fund_factory, accounts):
     
-    with brownie.reverts():
+    with brownie.reverts("Not governance"):
         fund_factory.updateGovernance(accounts[2], {'from': accounts[1]})
+
+def test_update_governance_zero_account(fund_factory, accounts):
+
+    zero_account = accounts.at("0x0000000000000000000000000000000000000000",force=True)
+    
+    with brownie.reverts("new governance shouldn't be empty"):
+        fund_factory.updateGovernance(zero_account, {'from': accounts[0]})
 
 def test_update_governance_accept_from_wrong_account(fund_factory, accounts):
     fund_factory.updateGovernance(accounts[2], {'from': accounts[0]})

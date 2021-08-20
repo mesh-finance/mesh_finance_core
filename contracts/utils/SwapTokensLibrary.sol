@@ -45,13 +45,22 @@ library SwapTokensLibrary {
                 dEXRouter.getAmountsOut(rewardAmount, path)[path.length - 1];
             if (underlyingAmountOut != 0) {
                 IERC20(rewardToken).safeApprove(_dEXRouter, rewardAmount);
+                uint256 underlyingBalanceBefore =
+                    IERC20(underlying).balanceOf(address(this));
                 dEXRouter.swapExactTokensForTokens(
                     rewardAmount,
                     minUnderlyingExpected,
                     path,
                     address(this),
                     // solhint-disable-next-line not-rely-on-time
-                    now + 30
+                    now
+                );
+                uint256 underlyingBalanceAfter =
+                    IERC20(underlying).balanceOf(address(this));
+                require(
+                    underlyingBalanceAfter.sub(underlyingBalanceBefore) >=
+                        minUnderlyingExpected,
+                    "Not liquidated properly"
                 );
             }
         }
