@@ -8,10 +8,11 @@ import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/math/Math.sol";
 import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/math/SafeMath.sol";
 import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/token/ERC20/SafeERC20.sol";
 import "../../interfaces/IStrategy.sol";
+import "../../interfaces/IStrategyUnderOptimizer.sol";
 import "../../interfaces/IFund.sol";
 import "../../interfaces/IGovernable.sol";
 
-contract ProfitStrategy is IStrategy {
+contract ProfitStrategy is IStrategy, IStrategyUnderOptimizer {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
@@ -22,6 +23,7 @@ contract ProfitStrategy is IStrategy {
     string public constant override version = "V1";
 
     uint256 internal constant MAX_BPS = 10000; // 100% in basis points
+    uint256 internal constant APR_BASE = 10**6;
 
     address public override underlying;
     address public override fund;
@@ -44,10 +46,6 @@ contract ProfitStrategy is IStrategy {
 
     function governance() internal returns (address) {
         return IGovernable(fund).governance();
-    }
-
-    function depositArbCheck() public view override returns (bool) {
-        return true;
     }
 
     modifier onlyFundOrGovernance() {
@@ -118,6 +116,20 @@ contract ProfitStrategy is IStrategy {
     // solhint-disable-next-line no-empty-blocks
     function doHardWork() external override onlyFundOrGovernance {
         // investAllUnderlying();   // call this externally for testing as profit geeneration should be after invesment
+    }
+
+    // solhint-disable-next-line no-unused-vars
+    function aprAfterDeposit(uint256 depositAmount)
+        external
+        view
+        override
+        returns (uint256)
+    {
+        return profitPerc.mul(APR_BASE).div(MAX_BPS);
+    }
+
+    function apr() external view override returns (uint256) {
+        return profitPerc.mul(APR_BASE).div(MAX_BPS);
     }
 
     // no tokens apart from underlying should be sent to this contract. Any tokens that are sent here by mistake are recoverable by governance

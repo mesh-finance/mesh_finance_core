@@ -12,7 +12,7 @@ This is the official repo of [Mesh Finance](https://mesh.finance).
 export WEB3_INFURA_PROJECT_ID=ProjectID
 ```
 
-3. Sign up for [Etherscan](www.etherscan.io) and generate an API key. This is required for fetching source codes of the mainnet contracts like DAI, yvaults etc. Store the API key in the `ETHERSCAN_TOKEN` environment variable.
+3. Sign up for [Etherscan](https://etherscan.io) and generate an API key. This is required for fetching source codes of the mainnet contracts like DAI, yvaults etc. Store the API key in the `ETHERSCAN_TOKEN` environment variable.
 
 ```bash
 export ETHERSCAN_TOKEN=ApiToken

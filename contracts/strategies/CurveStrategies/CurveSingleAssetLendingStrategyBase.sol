@@ -194,13 +194,6 @@ abstract contract CurveSingleAssetLendingStrategyBase is IStrategy {
         _;
     }
 
-    /**
-     *  Not used for now
-     */
-    function depositArbCheck() public view override returns (bool) {
-        return true;
-    }
-
     function setInvestActivated(bool _investActivated)
         external
         onlyFundManagerOrGovernance

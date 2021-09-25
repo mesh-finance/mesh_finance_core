@@ -114,13 +114,6 @@ abstract contract AlphaV2LendingStrategyBase is IStrategy {
     }
 
     /**
-     *  Not used for now
-     */
-    function depositArbCheck() public view override returns (bool) {
-        return true;
-    }
-
-    /**
      * Allows Governance to withdraw partial shares to reduce slippage incurred
      *  and facilitate migration / withdrawal / strategy switch / emergency
      */

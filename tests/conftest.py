@@ -10,6 +10,10 @@ def isolate(fn_isolation):
     pass
 
 @pytest.fixture(scope="module")
+def zero_account(accounts):
+    return accounts.at("0x0000000000000000000000000000000000000000", force=True)
+
+@pytest.fixture(scope="module")
 def token(Token, accounts):
     return Token.deploy("Stable Token", "STAB", 18, {'from': accounts[0]})
 
@@ -23,6 +27,10 @@ def fund(Fund, accounts):
 
 @pytest.fixture(scope="module")
 def fund_2(Fund, accounts):
+    return Fund.deploy({'from': accounts[0]})
+
+@pytest.fixture(scope="module")
+def fund_3(Fund, accounts):
     return Fund.deploy({'from': accounts[0]})
 
 @pytest.fixture(scope="module")
@@ -76,17 +84,22 @@ def connected_network():
 
 @pytest.fixture(scope="module")
 def usdc(interface, connected_network):
-    if (connected_network == "mainnet-fork"):
+    if (connected_network in ["mainnet-fork", "hardhat-fork"]):
         return interface.ERC20("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
     elif (connected_network == "matic-fork"):
         return interface.ERC20("0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174")
 
 @pytest.fixture(scope="module")
 def test_usdc_account(accounts, connected_network):
-    if (connected_network == "mainnet-fork"):
+    if (connected_network in ["mainnet-fork", "hardhat-fork"]):
         return accounts.at("0x47ac0fb4f2d84898e4d9e7b4dab3c24507a6d503",force=True)
     elif (connected_network == "matic-fork"):
         return accounts.at("0xa80191Fca50BE00f8952c69232c93D57eeaCaf6f",force=True)
+
+@pytest.fixture(scope="module")
+def test_usdc_account_2(accounts, connected_network):
+    if (connected_network in ["mainnet-fork", "hardhat-fork"]):
+        return accounts.at("0x6BB273bF25220D13C9b46c6eD3a5408A3bA9Bcc6",force=True)
 
 @pytest.fixture(scope="module")
 def fund_through_proxy_usdc(fund_factory, fund, usdc, accounts):
@@ -94,4 +107,6 @@ def fund_through_proxy_usdc(fund_factory, fund, usdc, accounts):
     fund_symbol = "MESH_HR_USDC"
     tx = fund_factory.createFund(fund, usdc.address, fund_name, fund_symbol, {'from': accounts[0]})
     fund_usdc_through_proxy = brownie.Fund.at(tx.new_contracts[0])
+    fund_usdc_through_proxy.setFundManager(accounts[1], {'from': accounts[0]})
+    fund_usdc_through_proxy.setRelayer(accounts[3], {'from': accounts[1]})
     return fund_usdc_through_proxy

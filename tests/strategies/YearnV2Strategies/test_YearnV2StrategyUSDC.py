@@ -4,7 +4,7 @@ import pytest, brownie
 
 strategy_weightage = 8000
 
-@pytest.mark.require_network("mainnet-fork")
+@pytest.mark.require_network("mainnet-fork", "hardhat-fork")
 def test_deployment(YearnV2StrategyUSDC, interface, fund_through_proxy_usdc, usdc, accounts):
     yearnv2strat = YearnV2StrategyUSDC.deploy(fund_through_proxy_usdc, {'from': accounts[0]})
     yVault_address = yearnv2strat.yVault()
@@ -16,9 +16,9 @@ def yearnv2strat(YearnV2StrategyUSDC, fund_through_proxy_usdc, usdc, accounts):
     return YearnV2StrategyUSDC.deploy(fund_through_proxy_usdc, {'from': accounts[0]})
 
 
-@pytest.mark.require_network("mainnet-fork")
+@pytest.mark.require_network("mainnet-fork", "hardhat-fork")
 def test_add_strategy(yearnv2strat, fund_through_proxy_usdc, usdc, accounts):
-    tx = fund_through_proxy_usdc.addStrategy(yearnv2strat, strategy_weightage, 0, {'from': accounts[0]})
+    tx = fund_through_proxy_usdc.addStrategy(yearnv2strat, strategy_weightage, 0, {'from': accounts[1]})
 
     assert fund_through_proxy_usdc.getStrategyList() == [yearnv2strat]
     assert fund_through_proxy_usdc.getStrategy(yearnv2strat)[0] == strategy_weightage
@@ -27,7 +27,7 @@ def test_add_strategy(yearnv2strat, fund_through_proxy_usdc, usdc, accounts):
 
 @pytest.fixture
 def fund_through_proxy_usdc_with_strategy_and_deposit(fund_through_proxy_usdc, yearnv2strat, usdc, test_usdc_account, accounts):
-    tx = fund_through_proxy_usdc.addStrategy(yearnv2strat, strategy_weightage, 0, {'from': accounts[0]})
+    tx = fund_through_proxy_usdc.addStrategy(yearnv2strat, strategy_weightage, 0, {'from': accounts[1]})
     
     amount_to_deposit = 1000 * (10 ** usdc.decimals())
     usdc.approve(fund_through_proxy_usdc, amount_to_deposit, {'from': test_usdc_account})
@@ -35,13 +35,13 @@ def fund_through_proxy_usdc_with_strategy_and_deposit(fund_through_proxy_usdc, y
 
     return fund_through_proxy_usdc
 
-@pytest.mark.require_network("mainnet-fork")
+@pytest.mark.require_network("mainnet-fork", "hardhat-fork")
 def test_hard_work(fund_through_proxy_usdc_with_strategy_and_deposit, yearnv2strat, interface, usdc, accounts):
 
     assert yearnv2strat.investedUnderlyingBalance() == 0
 
     amount_deposited = 1000 * (10 ** usdc.decimals())
-    tx = fund_through_proxy_usdc_with_strategy_and_deposit.doHardWork({'from': accounts[0]})
+    tx = fund_through_proxy_usdc_with_strategy_and_deposit.doHardWork({'from': accounts[1]})
 
     yVault_address = yearnv2strat.yVault()
     yVault = interface.IYVaultV2(yVault_address)
@@ -60,11 +60,11 @@ def test_hard_work(fund_through_proxy_usdc_with_strategy_and_deposit, yearnv2str
 @pytest.fixture
 def fund_through_proxy_usdc_after_hardwork(fund_through_proxy_usdc_with_strategy_and_deposit, accounts):
     
-    tx = fund_through_proxy_usdc_with_strategy_and_deposit.doHardWork({'from': accounts[0]})
+    tx = fund_through_proxy_usdc_with_strategy_and_deposit.doHardWork({'from': accounts[1]})
     
     return fund_through_proxy_usdc_with_strategy_and_deposit
 
-@pytest.mark.require_network("mainnet-fork")
+@pytest.mark.require_network("mainnet-fork", "hardhat-fork")
 def test_withdraw_small(fund_through_proxy_usdc_after_hardwork, yearnv2strat, interface, usdc, test_usdc_account):
     
     shares_to_withdraw = 100 * (10 ** fund_through_proxy_usdc_after_hardwork.decimals())
@@ -89,7 +89,7 @@ def test_withdraw_small(fund_through_proxy_usdc_after_hardwork, yearnv2strat, in
     assert strategy_balance_after == strategy_balance_before
 
 
-@pytest.mark.require_network("mainnet-fork")
+@pytest.mark.require_network("mainnet-fork", "hardhat-fork")
 def test_withdraw_large(fund_through_proxy_usdc_after_hardwork, yearnv2strat, interface, usdc, test_usdc_account):
     
     shares_to_withdraw = 500 * (10 ** fund_through_proxy_usdc_after_hardwork.decimals())
@@ -111,10 +111,10 @@ def test_withdraw_large(fund_through_proxy_usdc_after_hardwork, yearnv2strat, in
     assert fund_balance_before - fund_balance_after == shares_to_withdraw
     assert float(usdc_balance_after - usdc_balance_before) == pytest.approx(amount_to_withdraw)
     assert usdc_in_fund_after == 0
-    assert float(strategy_balance_before - strategy_balance_after) == pytest.approx(amount_to_withdraw - usdc_in_fund_before)
+    assert float(strategy_balance_before - strategy_balance_after) == pytest.approx(amount_to_withdraw - usdc_in_fund_before, rel=1e-5)
 
 
-@pytest.mark.require_network("mainnet-fork")
+@pytest.mark.require_network("mainnet-fork", "hardhat-fork")
 def test_remove_strategy(fund_through_proxy_usdc_after_hardwork, yearnv2strat, interface, usdc, accounts):
 
     total_value_locked_before = fund_through_proxy_usdc_after_hardwork.totalValueLocked()

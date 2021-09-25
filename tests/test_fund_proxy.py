@@ -36,11 +36,11 @@ def test_upgrade_fund_from_non_governance_account(chain, fund_proxy, accounts, f
     with brownie.reverts("Issue when finalizing the upgrade"):
         fund_proxy.upgrade(fund_2, {'from': accounts[1]})
 
-def test_upgrade_fund_wrong_implementation(chain, fund_proxy, fund_through_proxy, accounts, fund_2, fund):
+def test_upgrade_fund_wrong_implementation(chain, fund_proxy, fund_through_proxy, accounts, fund_2, fund_3):
     fund_proxy_address = fund_proxy.address
     FundProxy.remove(fund_proxy)
     fund_through_proxy = Fund.at(fund_proxy_address)
-    fund_through_proxy.scheduleUpgrade(fund, {'from': accounts[0]})
+    fund_through_proxy.scheduleUpgrade(fund_3, {'from': accounts[0]})
 
     Fund.remove(fund_through_proxy)
     fund_proxy = FundProxy.at(fund_proxy_address)
@@ -83,3 +83,18 @@ def test_changed_deposit_limit_after_upgrade(chain, fund_proxy, accounts, fund_2
     fund_through_proxy = Fund.at(fund_proxy_address)
     
     assert fund_through_proxy.depositLimit() == 10
+
+def test_schedule_upgrade_for_zero_address(fund_proxy, zero_account, accounts):
+    fund_proxy_address = fund_proxy.address
+    # FundProxy.remove(fund_proxy)
+    fund_through_proxy = Fund.at(fund_proxy_address)
+    
+    with brownie.reverts("new implementation address can not be zero address"):
+        fund_through_proxy.scheduleUpgrade(zero_account, {'from': accounts[0]})
+
+def test_schedule_upgrade_for_new_implementation_not_old_implementation (fund_proxy, fund, accounts):
+    fund_proxy_address = fund_proxy.address
+    # FundProxy.remove(fund_proxy)
+    fund_through_proxy = Fund.at(fund_proxy_address)
+    with brownie.reverts("new implementation address should not be same as current address"):
+        fund_through_proxy.scheduleUpgrade(fund, {'from':accounts[0]})

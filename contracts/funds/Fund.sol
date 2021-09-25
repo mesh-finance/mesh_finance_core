@@ -11,7 +11,7 @@ import "OpenZeppelin/openzeppelin-contracts@3.4.0/contracts/token/ERC20/SafeERC2
 import "OpenZeppelin/openzeppelin-contracts-upgradeable@3.4.0/contracts/token/ERC20/ERC20Upgradeable.sol";
 import "OpenZeppelin/openzeppelin-contracts-upgradeable@3.4.0/contracts/utils/ReentrancyGuardUpgradeable.sol";
 import "../../interfaces/IFund.sol";
-import "../../interfaces/IUpgradeSource.sol";
+import "../../interfaces/IFundProxy.sol";
 import "../../interfaces/IStrategy.sol";
 import "../utils/Governable.sol";
 import "./FundStorage.sol";
@@ -20,7 +20,6 @@ contract Fund is
     ERC20Upgradeable,
     ReentrancyGuardUpgradeable,
     IFund,
-    IUpgradeSource,
     Governable,
     FundStorage
 {
@@ -90,7 +89,7 @@ contract Fund is
         address _underlying,
         string memory _name,
         string memory _symbol
-    ) public initializer {
+    ) external initializer {
         require(_governance != ZERO_ADDRESS, "governance must be defined");
         require(_underlying != ZERO_ADDRESS, "underlying must be defined");
         ERC20Upgradeable.__ERC20_init(_name, _symbol);
@@ -224,6 +223,14 @@ contract Fund is
         return underlyingBalanceWithInvestment();
     }
 
+    function underlyingFromShares(uint256 _numShares)
+        external
+        view
+        returns (uint256)
+    {
+        return _underlyingFromShares(_numShares);
+    }
+
     function _underlyingFromShares(uint256 numShares)
         internal
         view
@@ -311,13 +318,12 @@ contract Fund is
             _totalWeightInStrategies().sub(strategies[activeStrategy].weightage)
         );
         uint256 totalStrategies = _getStrategyCount();
-        for (
+        if (totalStrategies > 1) {
             uint256 i = strategies[activeStrategy].indexInList;
-            i < totalStrategies - 1;
-            i++
-        ) {
-            strategyList[i] = strategyList[i + 1];
-            strategies[strategyList[i]].indexInList = i;
+            if (i != (totalStrategies - 1)) {
+                strategyList[i] = strategyList[totalStrategies - 1];
+                strategies[strategyList[i]].indexInList = i;
+            }
         }
         strategyList.pop();
         delete strategies[activeStrategy];
@@ -542,9 +548,9 @@ contract Fund is
                 ? underlyingBalanceInFund().sub(lastReserve)
                 : 0;
 
-        if (availableAmountToInvest == 0) {
-            return;
-        }
+        // if (availableAmountToInvest == 0) {
+        //     return;
+        // }
 
         _setTotalAccounted(totalAccounted.add(availableAmountToInvest));
         uint256 totalInvested = 0;
@@ -743,12 +749,20 @@ contract Fund is
         external
         onlyGovernance
     {
+        require(
+            newImplementation != ZERO_ADDRESS,
+            "new implementation address can not be zero address"
+        );
+        require(
+            newImplementation != IFundProxy(address(this)).implementation(),
+            "new implementation address should not be same as current address"
+        );
         _setNextImplementation(newImplementation);
         // solhint-disable-next-line not-rely-on-time
         _setNextImplementationTimestamp(block.timestamp.add(_changeDelay()));
     }
 
-    function shouldUpgrade() external view override returns (bool, address) {
+    function shouldUpgrade() external view returns (bool, address) {
         return (
             _nextImplementationTimestamp() != 0 &&
                 // solhint-disable-next-line not-rely-on-time
@@ -758,7 +772,7 @@ contract Fund is
         );
     }
 
-    function finalizeUpgrade() external override onlyGovernance {
+    function finalizeUpgrade() external onlyGovernance {
         _setNextImplementation(ZERO_ADDRESS);
         _setNextImplementationTimestamp(0);
     }

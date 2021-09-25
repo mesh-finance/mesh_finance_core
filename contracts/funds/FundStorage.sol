@@ -276,7 +276,7 @@ contract FundStorage is Initializable, SetGetAssembly {
         _setDepositLimitTxMin(0);
         _setPerformanceFeeFund(0);
         _setPlatformFee(0);
-        _setMaxInvestmentInStrategies(9000); // 9000 BPS (90%) can be accessed by the strategies. This is to keep something in fund for withdrawal.
+        _setMaxInvestmentInStrategies(9500); // 9500 BPS (95%) can be accessed by the strategies. This is to keep something in fund for withdrawal.
         _setTotalWeightInStrategies(0);
         _setTotalAccounted(0);
         _setTotalInvested(0);

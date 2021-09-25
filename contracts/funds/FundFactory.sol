@@ -2,7 +2,7 @@
 pragma solidity 0.6.12;
 
 import "./FundProxy.sol";
-import "./Fund.sol";
+import "../../interfaces/IFundInitializer.sol";
 import "../utils/Governable.sol";
 
 contract FundFactory is Governable {
@@ -20,7 +20,7 @@ contract FundFactory is Governable {
     ) public onlyGovernance returns (address) {
         require(_implementation != address(0), "fund cannot be empty");
         FundProxy proxy = new FundProxy(_implementation);
-        Fund(address(proxy)).initializeFund(
+        IFundInitializer(address(proxy)).initializeFund(
             msg.sender,
             _underlying,
             _name,
