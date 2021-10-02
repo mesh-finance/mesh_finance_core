@@ -19,5 +19,6 @@
     "hooks": {
       "pre-commit": "yarn lint:fix"
     }
-  }
+  },
+  "dependencies": {}
 }
